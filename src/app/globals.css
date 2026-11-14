@@ -545,6 +545,58 @@ canvas {
   }
 }
 
+/* ── LIVE FEED FILTER BAR ── */
+.live-feed-filters {
+  position: absolute;
+  bottom: 75px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(13, 27, 61, 0.08);
+  z-index: 7;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 32px);
+}
+
+.filter-chip {
+  border: none;
+  background: transparent;
+  color: var(--mute);
+  font: 600 12px inherit;
+  font-family: inherit;
+  padding: 6px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.filter-chip:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.filter-chip.active {
+  background: var(--blue);
+  color: #ffffff;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--blue) 40%, transparent);
+}
+
+.filter-chip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .hint {
   position: absolute;
   right: clamp(16px, 3vw, 40px);
@@ -554,6 +606,14 @@ canvas {
 }
 
 @media (max-width: 900px) {
+  .live-feed-filters {
+    position: static;
+    transform: none;
+    order: 2;
+    margin: 0 16px;
+    justify-content: center;
+  }
+  
   .mode-toggle-wrap {
     position: static;
     transform: none;
@@ -588,19 +648,19 @@ canvas {
     position: static;
   }
   .list {
-    order: 2;
+    order: 3;
     width: auto;
     margin: 0 16px;
   }
   .kpis {
-    order: 3;
+    order: 4;
     margin: 0 16px;
   }
   .spark {
     width: 100%;
   }
   .net-controls {
-    order: 4;
+    order: 5;
     margin: 0 16px;
     align-self: flex-start;
   }
@@ -608,7 +668,7 @@ canvas {
     display: none;
   }
   .dash-indicator {
-    order: 5;
+    order: 6;
     margin: 8px 16px 0;
     align-self: center;
     transform: none;

@@ -37,15 +37,15 @@ export function runAirportFrame(
     tp.status = 'Takeoff Roll (Rwy 09L)';
     tp.kmh = Math.round(110 + t * 190); // accelerates to 300 km/h
   } else if (p2 < 0.62) {
-    // Phase 2: ROTATE & 45° STEEP ANGLE CLIMB
-    // Trajectory is exactly 45 degrees: dy = dx
+    // Phase 2: ROTATE & 45° STEEP ANGLE CLIMB UPWARD!!!
+    // FIX: Pitch angle must be POSITIVE for nose-up climb!
     const t = (p2 - 0.26) / 0.36;
     const dist = t * 125;
     const x = -20 + dist;
     const climbY = 1.8 + dist; // dy = dx -> exactly 45° flight path!
-    // Smoothly rotate nose up to 45 degrees (Math.PI / 4 = 0.7854 rad)
-    const pitchAngle = Math.min(Math.PI / 4, 0.25 + smooth(t) * (Math.PI / 4 - 0.25));
-    const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchAngle);
+    // Rotate nose UPWARD (positive pitch angle)
+    const pitchAngle = smooth(t) * (Math.PI / 4); // 0 to +45 degrees (UPWARD!)
+    const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -pitchAngle); // Negative for upward pitch in Three.js
     tp.m.position.set(x, climbY, rwyZ_09L);
     tp.m.quaternion.copy(qEast).multiply(qPitch);
     tp.status = '45° Steep Climb (FL030)';
@@ -108,71 +108,101 @@ export function runAirportFrame(
     lp.status = 'Vacated Rwy 09R via Taxiway E';
     lp.kmh = 38;
   } else {
-    // Phase 4: Taxiing towards apron stands
+    // Phase 4: Taxiing to apron stand — use z=68 (well north of SQ-012 on z=55)
     const t = (p1 - 0.85) / 0.15;
-    const x = 63 - t * 40;
-    const z = 75 - t * 30;
-    lp.m.position.set(x, 1.8, z);
-    const qTaxi = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2 - 0.4);
+    const x = 63 - t * 50;
+    lp.m.position.set(x, 1.8, 68);
+    const qTaxi = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
     lp.m.quaternion.copy(qTaxi);
     lp.status = 'Taxiing to Apron Stand';
-    lp.kmh = 24;
+    lp.kmh = 22;
   }
 
-  // ── 3. LIVE DOCKING AIRPLANE (SQ-012) ─────────────────────────────────────────
-  // User Requirement 6: "show planes docking or parking at airport !!"
-  // Gate C1 stand: x = 84, z = -38.2. Door 1L at x = 82.75, z = -32.0.
+  // ── 3. COMPLETE GATE PARKING CYCLE (SQ-012) ──────────────────────────────────
+  // Docks at Gate C2 (east side of Concourse C, x=90, z=-24)
+  // Planes park PARALLEL to wall, nose east. SQ-012 taxies FROM WEST, turns south,
+  // drives east into parking slot. NO REVERSING — head first the whole way.
+  // Gate C2 (not modelled as static, so SQ-012 uses a fresh slot):
+  //   plane parks at x=88, z=-24, rotation.y=-PI/2 (nose east)
+  //   door at (88+6.2, -24+1.25) = (94.2, -22.75)
   const dp = state._dockingPlane;
-  dp.progress = ((dp.progress ?? 0) + dt * 0.032) % 1;
+  dp.progress = ((dp.progress ?? 0) + dt * 0.020) % 1;
   const pDock = dp.progress;
 
-  if (pDock < 0.35) {
-    // Phase 1: Taxiing on parallel taxiway towards Gate C1
-    const t = pDock / 0.35;
-    const x = 10 + t * 74; // 10 to 84
-    dp.m.position.set(x, 1.8, 43);
-    dp.m.quaternion.copy(qEast); // facing East
-    dp.status = 'Taxiing via Taxiway Alpha';
-    dp.kmh = Math.round(24 - t * 8);
-  } else if (pDock < 0.50) {
-    // Phase 2: Turning 90° left onto yellow Gate C1 lead-in line
-    const t = (pDock - 0.35) / 0.15;
-    const angle = Math.PI / 2 + t * (Math.PI / 2); // turns from East to North
-    const turnX = 84 - (1 - Math.sin(t * Math.PI * 0.5)) * 6;
-    const turnZ = 43 - t * 24;
-    dp.m.position.set(turnX, 1.8, turnZ);
-    const qTurnNorth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-    dp.m.quaternion.copy(qTurnNorth);
-    dp.status = 'Turning into Gate C1 Stand';
-    dp.kmh = 12;
-  } else if (pDock < 0.72) {
-    // Phase 3: Straight-in docking along Gate C1 centerline
-    const t = (pDock - 0.50) / 0.22;
-    const z = 19 - smooth(t) * 57.2; // 19 down to -38.2
-    dp.m.position.set(84, 1.8, z);
-    // Orient facing North (towards terminal)
-    const qNorth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0);
-    dp.m.quaternion.copy(qNorth);
-    const remainingMeters = Math.max(0, Math.round((1 - t) * 14));
-    dp.status = remainingMeters > 0 ? `VDGS Docking Guidance (${remainingMeters}m)` : 'VDGS: STOP';
-    dp.kmh = Math.round((1 - t) * 12);
-  } else if (pDock < 0.94) {
-    // Phase 4: DOCKED AT GATE C1 (Engines Off, Jet Bridge Connected)
-    dp.m.position.set(84, 1.8, -38.2);
-    dp.m.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0));
-    dp.status = 'Gate C1 Docked · Jet Bridge Connected';
-    dp.kmh = 0;
+  // heading east = rotation.y = -PI/2  (nose points +X)
+  const qNoseEast = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), -Math.PI/2);
+  // heading south = rotation.y = PI (nose points -Z)  — used while taxying from runway
+  const qNoseSouth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI);
+  // heading west = rotation.y = PI/2
+  const qNoseWest = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI/2);
 
-    // Jet bridge cab seals snugly against Door 1L
-    if (state._dockingBridgeCab) {
-      state._dockingBridgeCab.position.set(82.75, 2.7, -32.0);
-    }
-  } else {
-    // Phase 5: Pushback clearance & turnaround
-    const t = (pDock - 0.94) / 0.06;
-    dp.m.position.set(84, 1.8, -38.2 + t * 20);
-    dp.status = 'Gate C1 Pushback Approved';
+  if (pDock < 0.18) {
+    // Phase 1: Arrive from west on taxiway z=55 (clear of AF-402 zone z=75), heading east
+    const t = pDock / 0.18;
+    dp.m.position.set(-90 + t * 170, 1.8, 55);
+    dp.m.quaternion.copy(qEast);
+    dp.status = 'Taxiing via Taxiway Alpha';
+    dp.kmh = 24;
+  } else if (pDock < 0.26) {
+    // Phase 2: Turn south toward gate row (z=55 → z=24)
+    const t = (pDock - 0.18) / 0.08;
+    const angle = Math.PI/2 - smooth(t) * Math.PI; // east (PI/2) → south (PI+PI/2 = -PI/2... )
+    // simpler: interpolate from qEast to qNoseSouth
+    dp.m.quaternion.slerpQuaternions(qEast, qNoseSouth, smooth(t));
+    dp.m.position.set(80, 1.8, 55 - smooth(t) * 31);
+    dp.status = 'Turning South to Gate Row';
+    dp.kmh = 14;
+  } else if (pDock < 0.34) {
+    // Phase 3: Head south along gate lead-in line (nose leads, head first)
+    const t = (pDock - 0.26) / 0.08;
+    dp.m.position.set(88, 1.8, 24 - smooth(t) * 48); // 24 → -24
+    dp.m.quaternion.copy(qNoseSouth);
+    dp.status = 'Taxiing to Gate Stand';
+    dp.kmh = 12;
+  } else if (pDock < 0.42) {
+    // Phase 4: Turn nose to face east — park parallel (head-first into slot)
+    const t = (pDock - 0.34) / 0.08;
+    dp.m.quaternion.slerpQuaternions(qNoseSouth, qNoseEast, smooth(t));
+    dp.m.position.set(88, 1.8, -24);
+    dp.status = 'Aligning to Gate C2';
     dp.kmh = 6;
+  } else if (pDock < 0.60) {
+    // Phase 5: PARKED at Gate C2 — engines off, services
+    dp.m.position.set(88, 1.8, -24);
+    dp.m.quaternion.copy(qNoseEast);
+    dp.status = 'Gate C2 · Boarding & Refueling';
+    dp.kmh = 0;
+    if (state._dockingBridgeCab) {
+      state._dockingBridgeCab.position.set(94.2, 2.7, -22.75);
+    }
+  } else if (pDock < 0.68) {
+    // Phase 6: PUSHBACK — tug pushes plane BACKWARD (nose still east, plane rolls west)
+    // This is the only time plane moves opposite to nose direction — tug-driven
+    const t = (pDock - 0.60) / 0.08;
+    dp.m.position.set(88 - smooth(t) * 20, 1.8, -24); // pushed west 20m
+    dp.m.quaternion.copy(qNoseEast);
+    dp.status = 'Tug Pushback · Clearing Gate';
+    dp.kmh = Math.round(smooth(t) * 8);
+  } else if (pDock < 0.76) {
+    // Phase 7: Turn nose to face west (ready to taxi to runway)
+    const t = (pDock - 0.68) / 0.08;
+    dp.m.quaternion.slerpQuaternions(qNoseEast, qNoseWest, smooth(t));
+    dp.m.position.set(68, 1.8, -24 + smooth(t) * 10);
+    dp.status = 'Turning to Taxiway';
+    dp.kmh = 12;
+  } else if (pDock < 0.90) {
+    // Phase 8: Taxi west to runway on z=55 taxiway (head first, nose leads west)
+    const t = (pDock - 0.76) / 0.14;
+    dp.m.position.set(68 - smooth(t) * 158, 1.8, 55);
+    dp.m.quaternion.copy(qNoseWest);
+    dp.status = 'Taxiing to Runway 09L';
+    dp.kmh = 22;
+  } else {
+    // Phase 9: Hold short runway, wait for clear
+    dp.m.position.set(-90, 1.8, 55);
+    dp.m.quaternion.copy(qNoseWest);
+    dp.status = 'Holding Short Runway';
+    dp.kmh = 0;
   }
 
   // ── 4. CRUISING / SKY HOLDING AIRPLANE (UA-920) ──────────────────────────────

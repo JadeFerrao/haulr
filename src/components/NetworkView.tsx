@@ -37,6 +37,7 @@ export default function NetworkView() {
   const [fleetItems, setFleetItems] = useState<BaseTrackableItem[]>([]);
   const [sel, setSel] = useState(0);
   const [listCollapsed, setListCollapsed] = useState(false);
+  const [filterMode, setFilterMode] = useState<'all' | 'flights' | 'gse' | 'bus' | 'taxi'>('all');
   const dragRef = useRef<{ x: number; y: number } | null>(null);
   const camStateRef = useRef({ az: 0.78, el: 0.62, zoom: 66 });
   const tagEls = useRef<HTMLButtonElement[]>([]);
@@ -206,6 +207,19 @@ export default function NetworkView() {
 
       setFleetItems([...airState.flights]);
 
+      // Filtered items based on selected filter mode
+      const getFilteredFlights = () => {
+        if (filterMode === 'all') return airState.flights;
+        if (filterMode === 'flights') return airState.flights.filter(f => f.type === 'airliner');
+        if (filterMode === 'gse') return airState.flights.filter(f => 
+          f.subType === 'fuel' || f.subType === 'baggage' || f.subType === 'tug' || 
+          f.subType === 'ladder' || f.subType === 'catering' || f.subType === 'followme'
+        );
+        if (filterMode === 'bus') return airState.flights.filter(f => f.subType === 'bus');
+        if (filterMode === 'taxi') return airState.flights.filter(f => f.type === 'taxi');
+        return airState.flights;
+      };
+
       const sizeIt = () => {
         const w = view.clientWidth, h = view.clientHeight;
         airState.renderer.setSize(w, h, false);
@@ -250,7 +264,10 @@ export default function NetworkView() {
             f.bar.style.transform = `scaleX(${Math.max(0.08, Math.min(1, prog))})`;
           }
         });
-        setFleetItems(fs => [...fs]);
+        
+        // Update filtered list display
+        const filteredList = getFilteredFlights();
+        setFleetItems([...filteredList]);
       }, 400);
 
       return () => {
@@ -262,7 +279,7 @@ export default function NetworkView() {
         airState.renderer.dispose();
       };
     }
-  }, [mode, placeCam, updateCopyFade]);
+  }, [mode, placeCam, updateCopyFade, filterMode]);
 
   // Pointer & Wheel Interaction
   useEffect(() => {
@@ -278,7 +295,10 @@ export default function NetworkView() {
     const onMove = (e: PointerEvent) => {
       if (!dragRef.current) return;
       const cs = camStateRef.current;
-      cs.az = Math.max(0.2, Math.min(1.4, cs.az - (e.clientX - dragRef.current.x) * 0.005));
+      // Requirement 3: "i should be able to drag to scroll full 360 degree"
+      // Allow azimuth to rotate continuously without limits (full 360°)
+      cs.az = cs.az - (e.clientX - dragRef.current.x) * 0.005;
+      // Keep elevation constrained for usability
       cs.el = Math.max(0.4, Math.min(1.0, cs.el + (e.clientY - dragRef.current.y) * 0.003));
       dragRef.current = { x: e.clientX, y: e.clientY };
     };
@@ -372,6 +392,47 @@ export default function NetworkView() {
           </>
         )}
       </header>
+
+      {/* ── LIVE FEED FILTER BAR (AIRPORT MODE ONLY) ── */}
+      {mode === 'airport' && (
+        <div className="live-feed-filters">
+          <button
+            type="button"
+            className={`filter-chip ${filterMode === 'all' ? 'active' : ''}`}
+            onClick={() => setFilterMode('all')}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${filterMode === 'flights' ? 'active' : ''}`}
+            onClick={() => setFilterMode('flights')}
+          >
+            ✈️ Flights
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${filterMode === 'gse' ? 'active' : ''}`}
+            onClick={() => setFilterMode('gse')}
+          >
+            🚧 Airport Service
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${filterMode === 'bus' ? 'active' : ''}`}
+            onClick={() => setFilterMode('bus')}
+          >
+            🚌 Passenger Bus
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${filterMode === 'taxi' ? 'active' : ''}`}
+            onClick={() => setFilterMode('taxi')}
+          >
+            🚕 Taxi
+          </button>
+        </div>
+      )}
 
       <ShipmentList
         items={fleetItems}

@@ -119,6 +119,89 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     { z: 120, name: '09R' },
   ];
 
+  // ── PROMINENT "AIRPORT" 3D HOARDING SIGNS ON BOTH SIDES ─────────────────────
+  // Requirement 5: "AIRPORT hoarding on both sides! - fix"
+  
+  // Function to create one complete AIRPORT sign
+  const createAirportSign = () => {
+    const signGroup = new THREE.Group();
+    
+    // Large hoarding board structure (white background)
+    box(50, 8.0, 1.2, 0xffffff, 0, 0, 0, true, signGroup);
+    // Frame border
+    box(52, 8.5, 0.8, 0x2a2a2a, 0, 0, -0.5, true, signGroup);
+    
+    // Create actual 3D "AIRPORT" text using box geometry
+    const createLetter = (shape: string, x: number) => {
+      const letterGroup = new THREE.Group();
+      
+      switch(shape) {
+        case 'A':
+          box(1.2, 5.5, 0.8, 0xff0000, x - 1.5, 0, 0.7, true, letterGroup);
+          box(1.2, 5.5, 0.8, 0xff0000, x + 1.5, 0, 0.7, true, letterGroup);
+          box(3.0, 1.0, 0.8, 0xff0000, x, 2.25, 0.7, false, letterGroup);
+          box(2.4, 0.9, 0.8, 0xff0000, x, 0, 0.7, false, letterGroup);
+          break;
+        case 'I':
+          box(1.2, 5.5, 0.8, 0xff0000, x, 0, 0.7, true, letterGroup);
+          break;
+        case 'R':
+          box(1.2, 5.5, 0.8, 0xff0000, x - 1.2, 0, 0.7, true, letterGroup);
+          box(2.4, 1.0, 0.8, 0xff0000, x, 2.25, 0.7, false, letterGroup);
+          box(2.4, 1.0, 0.8, 0xff0000, x, 0.5, 0.7, false, letterGroup);
+          box(1.8, 3.0, 0.8, 0xff0000, x + 0.9, -1.25, 0.7, true, letterGroup);
+          break;
+        case 'P':
+          box(1.2, 5.5, 0.8, 0xff0000, x - 1.2, 0, 0.7, true, letterGroup);
+          box(2.4, 1.0, 0.8, 0xff0000, x, 2.25, 0.7, false, letterGroup);
+          box(2.4, 1.0, 0.8, 0xff0000, x, 0.5, 0.7, false, letterGroup);
+          box(1.2, 2.0, 0.8, 0xff0000, x + 1.2, 1.4, 0.7, true, letterGroup);
+          break;
+        case 'O':
+          box(1.2, 5.5, 0.8, 0xff0000, x - 1.5, 0, 0.7, true, letterGroup);
+          box(1.2, 5.5, 0.8, 0xff0000, x + 1.5, 0, 0.7, true, letterGroup);
+          box(3.0, 1.0, 0.8, 0xff0000, x, 2.25, 0.7, false, letterGroup);
+          box(3.0, 1.0, 0.8, 0xff0000, x, -2.25, 0.7, false, letterGroup);
+          break;
+        case 'T':
+          box(5.0, 1.0, 0.8, 0xff0000, x, 2.25, 0.7, false, letterGroup);
+          box(1.2, 5.5, 0.8, 0xff0000, x, 0, 0.7, true, letterGroup);
+          break;
+      }
+      return letterGroup;
+    };
+    
+    // Position letters: A I R P O R T
+    const letters = [
+      { char: 'A', x: -18 },
+      { char: 'I', x: -12 },
+      { char: 'R', x: -6 },
+      { char: 'P', x: 0 },
+      { char: 'O', x: 6 },
+      { char: 'R', x: 12 },
+      { char: 'T', x: 18 }
+    ];
+    
+    letters.forEach(({ char, x }) => {
+      const letter = createLetter(char, x);
+      signGroup.add(letter);
+    });
+    
+    return signGroup;
+  };
+  
+  // SIGN 1: Runway-facing side (faces South toward runways)
+  const sign1 = createAirportSign();
+  sign1.position.set(0, 18, -64);
+  sign1.rotation.y = 0; // Face South (toward runways)
+  S.add(sign1);
+  
+  // SIGN 2: Landside/Arrivals facing side (faces North toward parking/taxis)
+  const sign2 = createAirportSign();
+  sign2.position.set(0, 18, -64);
+  sign2.rotation.y = Math.PI; // Face North (toward car park/taxis)
+  S.add(sign2);
+
   const approachLights: THREE.Mesh[] = [];
   const appLightMat = bas(0xffffff);
 
@@ -229,59 +312,79 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     }
   });
 
-  // ── 1. AUTHENTIC MULTI-BAY AIRPORT CAR PARK (120+ REALISTIC CARS) ─────────────
-  // User Requirement 1: "they dont loook like parked cars at all!!"
-  // Large asphalt car park plaza (165m × 65m)
+  // ── 1. SEPARATE TAXI ZONE & CAR PARK WITH ENTRY/EXIT GATES ───────────────────
+  // Requirement 2: "i need a separate taxi section for taxis & separate for car park, 
+  // add a gate to show cars entering car park and going out"
+  
+  // ─── A. CAR PARK ZONE (West Side: z = -130 to -170, x = -75 to -15) ─────────
   const carParkBase = new THREE.Mesh(
-    new THREE.PlaneGeometry(165, 68),
+    new THREE.PlaneGeometry(62, 42),
     new THREE.MeshStandardMaterial({ color: dark ? 0x131a28 : 0x3d4a60, roughness: 0.88 })
   );
   carParkBase.rotation.x = -Math.PI / 2;
-  carParkBase.position.set(0, 0.16, -134);
+  carParkBase.position.set(-45, 0.16, -150);
   carParkBase.receiveShadow = true;
   S.add(carParkBase);
 
-  // Parking barriers & perimeter curbs
-  box(166, 0.35, 0.35, C.mast, 0, 0.25, -99.5, false, S);
-  box(166, 0.35, 0.35, C.mast, 0, 0.25, -168.5, false, S);
-  box(0.35, 0.35, 69, C.mast, -82.8, 0.25, -134, false, S);
-  box(0.35, 0.35, 69, C.mast, 82.8, 0.25, -134, false, S);
+  // Car park perimeter barriers
+  box(63, 0.35, 0.35, C.mast, -45, 0.25, -128.5, false, S);
+  box(63, 0.35, 0.35, C.mast, -45, 0.25, -171.5, false, S);
+  box(0.35, 0.35, 43, C.mast, -76.2, 0.25, -150, false, S);
+  box(0.35, 0.35, 43, C.mast, -13.8, 0.25, -150, false, S);
 
-  // Overhead high-mast parking floodlights
-  [-55, 0, 55].forEach(lx => {
-    cyl(0.22, 0.22, 8.5, C.mast, lx, 4.3, -134, 8, S);
-    box(3.2, 0.28, 0.6, 0xffffff, lx, 8.6, -134, false, S);
-    // Concrete base column
-    cyl(0.65, 0.65, 0.7, 0xadb5bd, lx, 0.45, -134, 8, S);
+  // CAR PARK ENTRY GATE (South entrance at z = -172)
+  box(6.5, 2.8, 0.4, 0xe8850c, -45, 1.6, -172, true, S); // Orange gate booth
+  box(0.25, 0.35, 0.35, 0xff3030, -48.5, 0.4, -172, false, S); // Red barrier arm (lowered)
+  box(0.25, 0.35, 0.35, 0xff3030, -41.5, 0.4, -172, false, S);
+  const entrySign = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.5, 1.2),
+    new THREE.MeshBasicMaterial({ color: 0x2fb5a2 })
+  );
+  entrySign.rotation.y = Math.PI;
+  entrySign.position.set(-45, 3.8, -172.5);
+  S.add(entrySign);
+
+  // CAR PARK EXIT GATE (North exit at z = -128)
+  box(6.5, 2.8, 0.4, 0xe8850c, -45, 1.6, -128, true, S);
+  box(0.25, 0.35, 0.35, 0x2fb5a2, -48.5, 0.4, -128, false, S); // Green barrier (open)
+  box(0.25, 0.35, 0.35, 0x2fb5a2, -41.5, 0.4, -128, false, S);
+  const exitSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.5, 1.2),
+    new THREE.MeshBasicMaterial({ color: 0xff8c00 })
+  );
+  exitSign.position.set(-45, 3.8, -127.5);
+  S.add(exitSign);
+
+  // Overhead parking lot lighting
+  [-58, -45, -32].forEach(lx => {
+    cyl(0.22, 0.22, 8.5, C.mast, lx, 4.3, -150, 8, S);
+    box(3.2, 0.28, 0.6, 0xffffff, lx, 8.6, -150, false, S);
+    cyl(0.65, 0.65, 0.7, 0xadb5bd, lx, 0.45, -150, 8, S);
   });
 
-  // Concrete wheel-stop bumpers and white U-shaped parking stall lines
-  // Two double parking bays:
-  // Bay 1: Drive aisle at z = -153. Stalls at z = -160 and z = -146
-  // Bay 2: Drive aisle at z = -122. Stalls at z = -129 and z = -115
-  const parkingRows = [
-    { stallZ: -160, aisleZ: -153, bumperZ: -162.2, faceNorth: false },
-    { stallZ: -146, aisleZ: -153, bumperZ: -143.8, faceNorth: true },
-    { stallZ: -129, aisleZ: -122, bumperZ: -131.2, faceNorth: false },
-    { stallZ: -115, aisleZ: -122, bumperZ: -112.8, faceNorth: true },
+  // Parking stalls with wheel stops and painted divider lines
+  const carParkRows = [
+    { stallZ: -162, aisleZ: -156, bumperZ: -164.2, faceNorth: false },
+    { stallZ: -150, aisleZ: -156, bumperZ: -147.8, faceNorth: true },
+    { stallZ: -144, aisleZ: -138, bumperZ: -146.2, faceNorth: false },
+    { stallZ: -132, aisleZ: -138, bumperZ: -129.8, faceNorth: true },
   ];
 
-  parkingRows.forEach(row => {
-    for (let x = -72; x <= 72; x += 3.4) {
-      // White stall divider lines (perpendicular to drive aisle)
+  carParkRows.forEach(row => {
+    for (let x = -70; x <= -20; x += 3.4) {
+      // White parking stall divider lines
       const pLine = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 5.2), markWhite);
       pLine.rotation.x = -Math.PI / 2;
       pLine.position.set(x, 0.20, row.stallZ);
       S.add(pLine);
-
-      // Concrete wheel-stop curb at head of stall
+      // Concrete wheel-stop curb
       box(2.0, 0.16, 0.32, 0xced4da, x + 1.7, 0.22, row.bumperZ, false, S);
     }
   });
 
-  // Drive aisle painted directional road arrows
-  [-45, 0, 45].forEach(ax => {
-    [-153, -122].forEach(az => {
+  // Directional road arrows on drive aisles
+  [-58, -45, -32].forEach(ax => {
+    [-156, -138].forEach(az => {
       const arrow = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), markWhite);
       arrow.rotation.x = -Math.PI / 2;
       arrow.position.set(ax, 0.19, az);
@@ -289,7 +392,37 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     });
   });
 
-  // Builder for detailed low-poly realistic cars (Sedans, SUVs, Hatchbacks)
+  // ─── B. TAXI ZONE (East Side: z = -130 to -170, x = 15 to 75) ───────────────
+  const taxiZoneBase = new THREE.Mesh(
+    new THREE.PlaneGeometry(62, 42),
+    new THREE.MeshStandardMaterial({ color: dark ? 0x1a2233 : 0x445268, roughness: 0.85 })
+  );
+  taxiZoneBase.rotation.x = -Math.PI / 2;
+  taxiZoneBase.position.set(45, 0.16, -150);
+  taxiZoneBase.receiveShadow = true;
+  S.add(taxiZoneBase);
+
+  // Taxi zone perimeter curbs
+  box(63, 0.35, 0.35, C.warn, 45, 0.25, -128.5, false, S); // Yellow curb
+  box(63, 0.35, 0.35, C.warn, 45, 0.25, -171.5, false, S);
+  box(0.35, 0.35, 43, C.warn, 13.8, 0.25, -150, false, S);
+  box(0.35, 0.35, 43, C.warn, 76.2, 0.25, -150, false, S);
+
+  // Taxi queue shelters with canopies
+  [35, 45, 55].forEach(tx => {
+    box(7.5, 3.2, 3.2, dark ? 0x1e2d42 : 0x4a5d7a, tx, 1.8, -150, true, S);
+    box(8.0, 0.35, 3.6, 0xffcb2b, tx, 3.6, -150, false, S); // Yellow roof
+  });
+
+  // Taxi zone signage
+  const taxiSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(18, 2.5),
+    new THREE.MeshBasicMaterial({ color: 0xffcb2b })
+  );
+  taxiSign.position.set(45, 5.5, -128);
+  S.add(taxiSign);
+
+  // Builder for realistic detailed cars
   function makeRealisticCar(type: 'sedan' | 'suv' | 'hatch', colorHex: number): THREE.Group {
     const g = new THREE.Group();
     // Chassis base
@@ -354,19 +487,14 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   const carColors = [0xfafafa, 0x243248, 0x4a6572, 0x98a6b5, 0xc1272d, 0x1f7a63, 0x333b47, 0xb8860b];
   const carTypes: ('sedan' | 'suv' | 'hatch')[] = ['sedan', 'suv', 'hatch'];
 
-  // Park 130+ cars inside marked stalls facing the drive aisle!
-  // Car's local length is along X.
-  // To park inside stall with length along Z facing the drive aisle:
-  // If drive aisle is to the North (-Z): rotation.y = Math.PI / 2
-  // If drive aisle is to the South (+Z): rotation.y = -Math.PI / 2
-  parkingRows.forEach(row => {
-    for (let x = -70.3; x <= 70.3; x += 3.4) {
-      if (rnd() > 0.87) continue; // realistic empty spaces (approx 13% empty)
+  // Park 100+ cars inside marked stalls in CAR PARK zone only
+  // Cars face drive aisle (perpendicular parking)
+  carParkRows.forEach(row => {
+    for (let x = -68.3; x <= -21.7; x += 3.4) {
+      if (rnd() > 0.87) continue; // realistic empty spaces
       const cType = carTypes[Math.floor(rnd() * carTypes.length)];
       const cHex = carColors[Math.floor(rnd() * carColors.length)];
       const car = makeRealisticCar(cType, cHex);
-
-      // Slight natural variation in parking depth
       const zOffset = (rnd() - 0.5) * 0.3;
       car.position.set(x, 0, row.stallZ + zOffset);
       car.rotation.y = row.faceNorth ? Math.PI / 2 : -Math.PI / 2;
@@ -374,22 +502,42 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     }
   });
 
-  // ── 2. EXPANDED AIRPORT TERMINAL COMPLEX ────────────────────────────────────
-  // User Requirement 3: "connect these to te airport , it should look liek an airport !!"
-  // Main Terminal Central Departure / Arrival Concourse
-  box(150, 9.4, 28, C.bld, 0, 4.7, -64, true, S);
-  box(154, 0.8, 30, C.roof, 0, 9.8, -64, true, S);
-  // Large panoramic floor-to-ceiling tinted glass facades
-  box(148, 6.0, 0.25, C.glass, 0, 4.5, -49.8, false, S);
-  box(148, 6.0, 0.25, C.glass, 0, 4.5, -78.2, false, S);
+  // ── 2. EXPANDED CIRCULAR AIRPORT TERMINAL COMPLEX ────────────────────────────
+  // User Requirement 3 & 5: "make the main airport circular or something, unique and big"
+  // Central Departure/Arrival Rotunda (iconic circular design)
+  const terminalRadius = 22;
+  cyl(terminalRadius, terminalRadius, 10.5, C.bld, 0, 5.25, -64, 32, S);
+  cyl(terminalRadius + 2, terminalRadius + 2, 0.9, C.roof, 0, 10.8, -64, 32, S);
+  
+  // Panoramic glass curtain wall wrapping the circular terminal
+  const glassRing = new THREE.Mesh(
+    new THREE.CylinderGeometry(terminalRadius + 0.1, terminalRadius + 0.1, 7.0, 32, 1, true),
+    new THREE.MeshStandardMaterial({ 
+      color: C.glass, 
+      transparent: true, 
+      opacity: 0.35, 
+      side: THREE.DoubleSide 
+    })
+  );
+  glassRing.position.set(0, 5.5, -64);
+  S.add(glassRing);
+  
+  // Rectangular wing extensions connecting to concourses
+  box(150, 9.4, 12, C.bld, 0, 4.7, -50, true, S);
+  box(154, 0.8, 14, C.roof, 0, 9.8, -50, true, S);
+  box(148, 6.0, 0.25, C.glass, 0, 4.5, -43.8, false, S);
 
   // 3 Concourse Piers (Concourse A, B, C extending into apron)
+  // WIDER piers so planes dock against the face at z = -2 (front wall)
   const concourses = [-65, 0, 65];
   concourses.forEach(px => {
-    box(16, 5.8, 44, C.bld, px, 2.9, -24, true, S);
-    box(17, 0.5, 45, C.roof, px, 6.0, -24, true, S);
-    box(0.25, 4.0, 42, C.glass, px + 8.05, 3.0, -24, false, S);
-    box(0.25, 4.0, 42, C.glass, px - 8.05, 3.0, -24, false, S);
+    box(22, 5.8, 50, C.bld, px, 2.9, -27, true, S);
+    box(23, 0.5, 51, C.roof, px, 6.0, -27, true, S);
+    // Glass walls
+    box(0.25, 4.0, 48, C.glass, px + 11.05, 3.0, -27, false, S);
+    box(0.25, 4.0, 48, C.glass, px - 11.05, 3.0, -27, false, S);
+    // Apron-facing glass front wall
+    box(20, 4.0, 0.25, C.glass, px, 3.0, -2, false, S);
   });
 
   // West Apron Hangar & Freight Logistics Hub
@@ -398,95 +546,107 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   box(36, 9.2, 0.25, dark ? 0x0f1828 : 0x24324a, -125, 5.0, 0.1, false, S);
 
   // ── 3. GREY TRANSPARENT PASSENGER BOARDING BRIDGES (AEROBRIDGES) ────────────
-  // User Requirement 5: "i need a grey traparent brindge connected to doors of these planes"
-  // User Requirement 3: "connect these to te airport , it should look liek an airport !!"
+  // ── 3. GREY TRANSPARENT PASSENGER BOARDING BRIDGES (AEROBRIDGES) ────────────
+  // REFERENCE: Planes park PARALLEL to concourse SIDE walls, nose pointing east/west (±X).
+  // Jetbridge extends from concourse SIDE WALL in the X direction to plane door.
+  //
+  // Plane local: nose=+Z, door1L at (x=-1.25, z=+6.2)
+  // Parked nose-east (rotation.y = -PI/2):
+  //   door1L world = plane_pos + rotate((-1.25,0,6.2), -PI/2) = plane_pos + (6.2, 0, 1.25)
+  //   → door at (planeX+6.2,  planeZ+1.25)
+  //
+  // Gate layout (all planes at z = -16 to -20, apron zone):
+  //   Concourse A east wall (x=-54): planes nose east at x=-40, z=-24 & z=-8
+  //   Concourse B east wall (x= 11): planes nose east at x= 23, z=-24 & z=-8
+  //   Concourse C west wall (x= 54): plane  nose west at x= 68, z=-16
+
   const glassBridgeMat = new THREE.MeshStandardMaterial({
     color: 0x94a6bc,
     transparent: true,
-    opacity: 0.42,
+    opacity: 0.55,
     roughness: 0.12,
     metalness: 0.28,
     side: THREE.DoubleSide,
   });
 
   interface JetBridgeConfig {
-    pierWallX: number;
-    doorTargetX: number;
-    doorTargetZ: number;
+    wallX: number;    // concourse side wall X
+    doorX: number;    // plane door X (bridge endpoint)
+    doorZ: number;    // plane door Z (and bridge Z centreline)
     gateName: string;
   }
 
   const jetBridges: JetBridgeConfig[] = [
-    // Gate A1 (Concourse A west side)
-    { pierWallX: -73.0, doorTargetX: -82.75, doorTargetZ: -32.0, gateName: 'GATE A1' },
-    // Gate A2 (Concourse A west side)
-    { pierWallX: -73.0, doorTargetX: -82.75, doorTargetZ: -10.0, gateName: 'GATE A2' },
-    // Gate B1 (Concourse B west side)
-    { pierWallX: -8.0, doorTargetX: -17.75, doorTargetZ: -30.0, gateName: 'GATE B1' },
-    // Gate B2 (Concourse B east side)
-    { pierWallX: 8.0, doorTargetX: 17.75, doorTargetZ: -30.0, gateName: 'GATE B2' },
-    // Gate C1 (Concourse C east side - Docking gate for SQ-012)
-    { pierWallX: 73.0, doorTargetX: 82.75, doorTargetZ: -32.0, gateName: 'GATE C1' },
-    // Gate C2 (Concourse C east side)
-    { pierWallX: 73.0, doorTargetX: 82.75, doorTargetZ: -10.0, gateName: 'GATE C2' },
+    // Concourse A east wall (x=-54), planes nose-east at x=-40, z=-26 and z=4
+    // Door at planeX - 6.2 = -46.2, planeZ + 1.25
+    { wallX: -54, doorX: -46.2, doorZ: -24.75, gateName: 'GATE A1' },
+    { wallX: -54, doorX: -46.2, doorZ:   5.25, gateName: 'GATE A2' },
+    // Concourse B east wall (x=11), planes nose-east at x=23, z=-26 and z=4
+    // Door at planeX - 6.2 = 16.8, planeZ + 1.25
+    { wallX: 11,  doorX:  16.8, doorZ: -24.75, gateName: 'GATE B1' },
+    { wallX: 11,  doorX:  16.8, doorZ:   5.25, gateName: 'GATE B2' },
+    // Concourse C west wall (x=54), plane nose-west (rot +PI/2) at x=68, z=-11
+    // For nose-west: local +Z → world +X, door local(-1.25,0,6.2) → world(+6.2, 0, -1.25) relative
+    // Door world = (68+6.2, -11-1.25) = (74.2, -12.25)
+    { wallX: 54,  doorX:  74.2, doorZ: -12.25, gateName: 'GATE C1' },
   ];
 
   let dockingBridgeCabGroup: THREE.Group | undefined;
 
   jetBridges.forEach(jb => {
-    const span = Math.abs(jb.doorTargetX - jb.pierWallX);
-    const midX = (jb.pierWallX + jb.doorTargetX) / 2;
-    const z = jb.doorTargetZ;
+    const spanX = Math.abs(jb.doorX - jb.wallX);
+    const midX  = (jb.wallX + jb.doorX) / 2;
+    const bz    = jb.doorZ;
+    const dir   = jb.doorX > jb.wallX ? 1 : -1; // bridge goes east (+1) or west (-1)
 
-    // 1. Tarmac gate markings: yellow lead-in line & red safety boundary envelope
-    const leadIn = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 28), markYellow);
+    // 1. Yellow tarmac guide line (runs Z, marks parking spot)
+    const leadIn = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 22), markYellow);
     leadIn.rotation.x = -Math.PI / 2;
-    leadIn.position.set(jb.doorTargetX - (jb.pierWallX > jb.doorTargetX ? 1.25 : -1.25), 0.24, z + 8);
+    leadIn.position.set(jb.doorX, 0.24, bz + 11);
     S.add(leadIn);
 
-    // Stop bar line across lead-in
-    const stopBar = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.4), markYellow);
+    const stopBar = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.4), markYellow);
     stopBar.rotation.x = -Math.PI / 2;
-    stopBar.position.set(jb.doorTargetX - (jb.pierWallX > jb.doorTargetX ? 1.25 : -1.25), 0.25, z);
+    stopBar.position.set(jb.doorX, 0.25, bz);
     S.add(stopBar);
 
-    // 2. Terminal Rotunda Tower (concourse exit portal)
-    cyl(1.5, 1.5, 4.4, C.navy, jb.pierWallX, 2.2, z, 12, S);
-    // Gate sign display panel
-    box(0.2, 0.9, 2.2, 0x111c2e, jb.pierWallX + (jb.pierWallX > jb.doorTargetX ? -0.8 : 0.8), 3.8, z, false, S);
+    // 2. Gate rotunda pedestal on concourse side wall
+    cyl(1.2, 1.2, 4.0, C.navy, jb.wallX, 2.0, bz, 12, S);
+    box(0.2, 0.8, 1.8, 0x111c2e, jb.wallX - dir * 0.5, 3.4, bz, false, S);
 
-    // 3. GREY TRANSPARENT GLASS WALKWAY SPAN
-    // Walkway floor (solid dark slate grey)
-    box(span, 0.22, 2.0, 0x2b384c, midX, 1.6, z, true, S);
-    // Walkway roof cap (solid grey)
-    box(span, 0.22, 2.1, 0x48566d, midX, 3.8, z, true, S);
+    // 3. Glass walkway bridge (runs in X direction)
+    const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(spanX, 0.22, 2.0), mat(0x2b384c));
+    floorMesh.position.set(midX, 1.6, bz);
+    floorMesh.castShadow = true;
+    S.add(floorMesh);
 
-    // BOTH SIDE WALLS: GREY TRANSPARENT GLASS
-    const gWall1 = new THREE.Mesh(new THREE.BoxGeometry(span, 2.0, 0.08), glassBridgeMat);
-    gWall1.position.set(midX, 2.7, z + 1.0);
+    const roofMesh = new THREE.Mesh(new THREE.BoxGeometry(spanX, 0.22, 2.1), mat(0x48566d));
+    roofMesh.position.set(midX, 3.8, bz);
+    S.add(roofMesh);
+
+    // Glass side walls (face north/south, run in X)
+    const gWall1 = new THREE.Mesh(new THREE.BoxGeometry(spanX, 2.0, 0.08), glassBridgeMat);
+    gWall1.position.set(midX, 2.7, bz + 1.0);
     S.add(gWall1);
-
-    const gWall2 = new THREE.Mesh(new THREE.BoxGeometry(span, 2.0, 0.08), glassBridgeMat);
-    gWall2.position.set(midX, 2.7, z - 1.0);
+    const gWall2 = new THREE.Mesh(new THREE.BoxGeometry(spanX, 2.0, 0.08), glassBridgeMat);
+    gWall2.position.set(midX, 2.7, bz - 1.0);
     S.add(gWall2);
 
-    // Vertical structural mullions along the glass corridor
-    for (let m = 0; m <= span; m += 2.4) {
-      const mx = jb.pierWallX < jb.doorTargetX ? jb.pierWallX + m : jb.pierWallX - m;
-      cyl(0.08, 0.08, 2.0, C.mast, mx, 2.7, z + 1.0, 6, S);
-      cyl(0.08, 0.08, 2.0, C.mast, mx, 2.7, z - 1.0, 6, S);
+    // Vertical mullions
+    for (let xOff = 0; xOff <= spanX; xOff += 2.4) {
+      const mx = jb.wallX + dir * xOff;
+      cyl(0.08, 0.08, 2.0, C.mast, mx, 2.7, bz + 1.0, 6, S);
+      cyl(0.08, 0.08, 2.0, C.mast, mx, 2.7, bz - 1.0, 6, S);
     }
 
-    // 4. Telescoping steel support column & wheel bogie on tarmac
-    cyl(0.2, 0.2, 1.5, C.mast, midX, 0.8, z, 8, S);
-    const bogie = box(0.5, 0.35, 2.0, 0x181818, midX, 0.25, z, false, S);
+    // 4. Ground support column at door end
+    cyl(0.18, 0.18, 1.5, C.mast, jb.doorX, 0.8, bz, 8, S);
 
-    // 5. Docking cab with black rubber accordion bellows
+    // 5. Docking cab (bellows face plane in X direction)
     const cabGroup = new THREE.Group();
     box(2.2, 2.3, 2.2, 0x263345, 0, 0, 0, true, cabGroup);
-    // Rubber bellows seal facing airplane fuselage door
-    box(0.3, 2.1, 1.9, 0x11141a, jb.pierWallX > jb.doorTargetX ? -1.15 : 1.15, 0, 0, false, cabGroup);
-    cabGroup.position.set(jb.doorTargetX, 2.7, z);
+    box(0.3, 2.1, 1.9, 0x11141a, dir * 1.15, 0, 0, false, cabGroup);
+    cabGroup.position.set(jb.doorX, 2.7, bz);
     S.add(cabGroup);
 
     if (jb.gateName === 'GATE C1') {
@@ -636,35 +796,65 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     return g;
   }
 
-  // Baggage Tractor with 3 Linked Luggage Carts
+  // Baggage Tractor + 4 trailing carts (tractor faces +Z, carts trail in -Z)
+  // FIX: Carts BEHIND the tractor like a real train — tractor leads, carts follow
   function makeBaggageTrain(): THREE.Group {
     const g = new THREE.Group();
-    box(1.8, 1.1, 1.2, C.warn, 0, 0.7, 0, true, g);
-    box(0.7, 0.8, 1.0, dark ? 0x11182c : 0x22304d, -0.3, 1.4, 0, false, g);
+
+    // ── TRACTOR (leads the train) ──
+    // Body
+    box(2.2, 1.4, 3.0, C.warn, 0, 0.9, 0, true, g);
+    // Cab
+    box(2.0, 1.2, 1.4, dark ? 0x1c283f : 0x364868, 0, 1.9, 0.6, true, g);
+    // Windshield
+    box(1.8, 0.8, 0.1, C.glass, 0, 2.0, 1.32, false, g);
+    // Headlights
+    box(0.4, 0.3, 0.1, 0xffffff, 0.6, 1.1, 1.52, false, g);
+    box(0.4, 0.3, 0.1, 0xffffff, -0.6, 1.1, 1.52, false, g);
+    // Amber flashing light on roof
+    box(0.4, 0.25, 0.4, 0xffaa00, 0, 2.6, 0.5, false, g);
+    // Tractor wheels (rotation.x = PI/2 so they roll forward)
+    const twg = new THREE.CylinderGeometry(0.38, 0.38, 0.32, 12);
+    [[-0.9, 0.9], [0.9, 0.9], [-0.9, -0.9], [0.9, -0.9]].forEach(([wx, wz]) => {
+      const w = new THREE.Mesh(twg, mat(0x11182c));
+      w.rotation.x = Math.PI / 2;
+      w.position.set(wx, 0.38, wz);
+      w.castShadow = true;
+      g.add(w);
+    });
+
+    // ── 4 CARTS trailing BEHIND (-Z direction) ──
     const cartColors = [C.blue, dark ? 0x4fd1bd : 0x2fb5a2, C.navy, C.warn];
-    for (let c = 1; c <= 3; c++) {
-      const cz = -c * 2.8;
-      box(2.0, 0.4, 1.2, 0x5a6d8c, 0, 0.45, cz, true, g);
-      box(0.15, 0.15, 1.4, 0x111624, 0, 0.35, cz + 1.4, false, g);
-      for (let s = 0; s < 3; s++) {
-        box(0.65, 0.45, 0.45, cartColors[(c + s) % 4], -0.4 + s * 0.4, 0.8, cz, true, g);
+    const cartSpacing = 3.5; // gap between front of one cart and front of next
+
+    for (let c = 1; c <= 4; c++) {
+      const cz = -(c * cartSpacing + 1.5); // behind tractor rear
+
+      // Cart flat-bed platform
+      box(2.4, 0.35, 2.8, 0x5a6d8c, 0, 0.35, cz, true, g);
+
+      // Coupling rod from previous element to this cart
+      box(0.14, 0.14, cartSpacing - 2.6, 0x888888, 0, 0.42, cz + (cartSpacing - 2.6) / 2 + 1.4, false, g);
+
+      // Luggage items on the cart (2 rows of 2 bags each)
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 2; col++) {
+          box(0.75, 0.55, 0.65, cartColors[(c + row + col) % 4],
+            (col - 0.5) * 0.85, 0.75, cz - 0.55 + row * 0.75, true, g);
+        }
       }
-      const cwg = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 10);
-      [[-0.6, 0.6], [0.6, 0.6], [-0.6, -0.6], [0.6, -0.6]].forEach(([wx, wz]) => {
+
+      // Cart wheels
+      const cwg = new THREE.CylinderGeometry(0.28, 0.28, 0.22, 10);
+      [[-0.9, 1.0], [0.9, 1.0], [-0.9, -1.0], [0.9, -1.0]].forEach(([wx, wz]) => {
         const w = new THREE.Mesh(cwg, mat(0x11182c));
-        w.rotation.z = Math.PI / 2;
-        w.position.set(wx, 0.25, cz + wz);
+        w.rotation.x = Math.PI / 2;
+        w.position.set(wx, 0.28, cz + wz);
         g.add(w);
       });
     }
-    const wg = new THREE.CylinderGeometry(0.32, 0.32, 0.25, 10);
-    [[-0.55, 0.55], [0.55, 0.55], [-0.55, -0.55], [0.55, -0.55]].forEach(([wx, wz]) => {
-      const w = new THREE.Mesh(wg, mat(0x11182c));
-      w.rotation.z = Math.PI / 2;
-      w.position.set(wx, 0.32, wz);
-      g.add(w);
-    });
-    g.scale.setScalar(0.75);
+
+    g.scale.setScalar(0.78);
     S.add(g);
     return g;
   }
@@ -706,6 +896,44 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
       g.add(w);
     });
     g.scale.setScalar(0.78);
+    S.add(g);
+    return g;
+  }
+
+  // Passenger Boarding Stairs / Ladder Truck
+  function makeLadderTruck(): THREE.Group {
+    const g = new THREE.Group();
+    // Truck chassis
+    box(3.2, 1.4, 2.0, C.warn, 0, 0.9, 0, true, g);
+    box(1.2, 1.1, 1.8, dark ? 0x1c283f : 0x364868, 0.8, 1.75, 0, true, g);
+    box(0.08, 0.75, 1.5, C.glass, 1.52, 1.8, 0, false, g);
+    
+    // Extendable stairs platform (elevated)
+    box(2.5, 0.3, 1.8, 0xced4da, -1.0, 2.8, 0, false, g);
+    // Stairs steps
+    for (let s = 0; s < 5; s++) {
+      const sz = -0.7 + s * 0.35;
+      box(2.3, 0.12, 0.28, 0x8a95a1, -1.0, 2.9 - s * 0.22, sz, false, g);
+    }
+    // Handrails
+    box(0.08, 1.4, 1.9, 0xffffff, -2.15, 3.2, 0, false, g);
+    box(0.08, 1.4, 1.9, 0xffffff, 0.15, 3.2, 0, false, g);
+    
+    // Support columns
+    cyl(0.12, 0.12, 2.0, C.mast, -1.0, 1.8, 0.8, 8, g);
+    cyl(0.12, 0.12, 2.0, C.mast, -1.0, 1.8, -0.8, 8, g);
+    
+    // Wheels
+    const wg = new THREE.CylinderGeometry(0.44, 0.44, 0.4, 12);
+    [[-1.2, 0.95], [1.2, 0.95], [-1.2, -0.95], [1.2, -0.95]].forEach(([x, z]) => {
+      const w = new THREE.Mesh(wg, mat(0x11182c));
+      w.rotation.x = Math.PI / 2;
+      w.position.set(x, 0.44, z);
+      w.castShadow = true;
+      g.add(w);
+    });
+    
+    g.scale.setScalar(0.72);
     S.add(g);
     return g;
   }
@@ -755,6 +983,8 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
 
   // ── 4. PARKED AIRPLANES (CONNECTED TO JET BRIDGES AT DOORS) ─────────────────
   // User Requirement 2 & 5: Connected to door, not tail
+  // User Requirement 7: "planes enter to park head 1st not tail reverse (they are not cars)"
+  // All planes are parked NOSE/HEAD-FIRST facing the terminal building (North orientation)
   const parkedPlanes: AirportFlight[] = [
     {
       id: 'PA-881',
@@ -818,37 +1048,62 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     },
   ];
 
-  // Exact positions & rotations so Door 1L (at x = -1.25, z = +6.2) meets the jetway cab!
-  // Gate A1: plane at x = -84, z = -38.2. Door is at x = -84 + 1.25 = -82.75, z = -38.2 + 6.2 = -32.0!
-  parkedPlanes[0].m.position.set(-84, 1.8, -38.2);
-  parkedPlanes[0].m.rotation.y = 0;
+  // Position parked planes PARALLEL to concourse SIDE walls, nose east/west (±X)
+  // This matches the reference image exactly.
+  //
+  // Concourse A east wall at x=-54:
+  //   Planes nose east (rotation.y=-PI/2) at x=-40, door=(x+6.2, z+1.25)
+  //   Gate A1: planePos=(-40,-24) → door=(-33.8,-22.75) ✓
+  //   Gate A2: planePos=(-40, -8) → door=(-33.8, -6.75) ✓
+  //
+  // Concourse B east wall at x=11:
+  //   Planes at x=23 → door=(29.2, z+1.25)
+  //   Gate B1: planePos=(23,-24) → door=(29.2,-22.75) ✓
+  //   Gate B2: planePos=(23, -8) → door=(29.2, -6.75) ✓
+  //
+  // Concourse C west wall at x=54:
+  //   Plane nose west (rotation.y=+PI/2) at x=68 → door=(68-6.2, z-1.25)=(61.8,-17.25) ✓
 
-  // Gate A2: plane at x = -84, z = -16.2. Door is at x = -82.75, z = -16.2 + 6.2 = -10.0!
-  parkedPlanes[1].m.position.set(-84, 1.8, -16.2);
-  parkedPlanes[1].m.rotation.y = 0;
+  // PA-881 — Gate A1 (Concourse A, nose east) — 30 unit Z spacing
+  parkedPlanes[0].m.position.set(-40, 1.8, -26);
+  parkedPlanes[0].m.rotation.y = -Math.PI / 2;
 
-  // Gate B1: plane at x = -19, z = -36.2. Door is at x = -17.75, z = -30.0!
-  parkedPlanes[2].m.position.set(-19, 1.8, -36.2);
-  parkedPlanes[2].m.rotation.y = 0;
+  // LH-318 — Gate A2 (Concourse A, nose east) — 30 units further north
+  parkedPlanes[1].m.position.set(-40, 1.8, 4);
+  parkedPlanes[1].m.rotation.y = -Math.PI / 2;
 
-  // Gate B2: plane at x = 19, z = -36.2. Facing south, left door faces west concourse at x = 17.75, z = -30.0!
-  parkedPlanes[3].m.position.set(19, 1.8, -36.2);
-  parkedPlanes[3].m.rotation.y = 0;
+  // BA-109 — Gate B1 (Concourse B, nose east) — 30 unit Z spacing
+  parkedPlanes[2].m.position.set(23, 1.8, -26);
+  parkedPlanes[2].m.rotation.y = -Math.PI / 2;
 
-  // Gate C2: plane at x = 84, z = -16.2. Left door at x = 82.75, z = -10.0!
-  parkedPlanes[4].m.position.set(84, 1.8, -16.2);
-  parkedPlanes[4].m.rotation.y = 0;
+  // QR-502 — Gate B2 (Concourse B, nose east)
+  parkedPlanes[3].m.position.set(23, 1.8, 4);
+  parkedPlanes[3].m.rotation.y = -Math.PI / 2;
+
+  // AF-114 — Gate C1 (Concourse C, nose west)
+  parkedPlanes[4].m.position.set(68, 1.8, -11);
+  parkedPlanes[4].m.rotation.y = Math.PI / 2;
 
   // Ground service equipment safely docked at stands
   const gateGSE: AirportFlight[] = [
     { id: 'TUG-01', type: 'gse', subType: 'tug', route: 'Gate A1 · Pushback Tug Attached to Nosegear', m: makePushbackTug(), status: 'Tug Connected', kmh: 0, delayed: false, spd: 0, d: 0 },
     { id: 'FUEL-02', type: 'gse', subType: 'fuel', route: 'Gate B2 · Underwing Hydrant Fuel Truck', m: makeFuelTruck(), status: 'Hydrant Active', kmh: 0, delayed: false, spd: 0, d: 0 },
+    { id: 'LADD-01', type: 'gse', subType: 'ladder', route: 'Gate A2 · Passenger Boarding Stairs', m: makeLadderTruck(), status: 'Stairs Extended', kmh: 0, delayed: false, spd: 0, d: 0 },
+    { id: 'LADD-02', type: 'gse', subType: 'ladder', route: 'Gate C2 · Passenger Disembarkation', m: makeLadderTruck(), status: 'At Aircraft Door', kmh: 0, delayed: false, spd: 0, d: 0 },
   ];
-  gateGSE[0].m.position.set(-84, 0, -28);
-  gateGSE[0].m.rotation.y = Math.PI;
+  
+  // Position GSE vehicles next to their assigned aircraft (updated positions)
+  gateGSE[0].m.position.set(-40, 0, -38);  // Tug at A1 nose gear (nose faces west → nose tip at x=-40-11=-51)
+  gateGSE[0].m.rotation.y = -Math.PI / 2;
 
-  gateGSE[1].m.position.set(26, 0, -36);
+  gateGSE[1].m.position.set(23, 0, -4);    // Fuel truck under B2 wing
   gateGSE[1].m.rotation.y = 0;
+
+  gateGSE[2].m.position.set(-44, 0, 4);    // Ladder at A2 door
+  gateGSE[2].m.rotation.y = -Math.PI / 2;
+
+  gateGSE[3].m.position.set(72, 0, -11);   // Ladder at C1 door
+  gateGSE[3].m.rotation.y = Math.PI / 2;
 
   // ── 5. DYNAMIC ACTIVE FLIGHTS ───────────────────────────────────────────────
   // Flight 1: Takeoff Flight (EK-204) - 45-degree angle climb out!
@@ -888,13 +1143,14 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
 
   // Flight 3: Live Docking Flight (SQ-012)
   // User Requirement 6: "show planes docking or parking at airport !!"
+  // UPDATED: Now docks at Gate C2 (x=100, z=-30)
   const dockingPlane: AirportFlight = {
     id: 'SQ-012',
     type: 'airliner',
     subType: 'docking',
-    route: 'Singapore SIN → Taxiing & Docking at Gate C1',
+    route: 'Singapore SIN → Taxiing & Docking at Gate C2',
     m: makeAirplane(0x0e7c61, 1.0),
-    status: 'Taxiing to Gate C1',
+    status: 'Taxiing to Gate C2',
     kmh: 22,
     delayed: false,
     spd: 20,
@@ -919,10 +1175,11 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     altitude: 85,
   };
 
-  // ── 6. SEPARATE DEDICATED LANES FOR ALL VEHICLES (ZERO COLLISIONS) ─────────
-  // User Requirement 4 & 6: "these are seperate vehicles!!" & no overlap
-  // Lane 1: Apron Passenger Bus Corridor (z = 36 to 46)
-  const busLoop = loopPts(-115, 115, 36, 46, 4.5);
+  // ── 6. COMPLETELY SEPARATE VEHICLE LANES ────────────────────────────────────
+  // Buses: outer service road z=8 to z=28 (apron, south of terminal)
+  // Baggage: inner service road z=48 to z=62 (between apron and taxiway at z=82)
+  // These two zones have a 20-unit gap — zero overlap possible.
+  const busLoop = loopPts(-85, 85, 8, 28, 5.0);
   const buses: AirportFlight[] = [
     {
       id: 'BUS-01',
@@ -947,7 +1204,7 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
       kmh: 28,
       delayed: false,
       spd: 4.8,
-      d: busLoop.T * 0.333, // exactly 1/3 loop ahead
+      d: busLoop.T * 0.125, // evenly spaced
       lp: { ...busLoop, v: 3.2 },
     },
     {
@@ -960,14 +1217,78 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
       kmh: 30,
       delayed: false,
       spd: 5.0,
-      d: busLoop.T * 0.666, // exactly 2/3 loop ahead
+      d: busLoop.T * 0.25, // evenly spaced
+      lp: { ...busLoop, v: 3.2 },
+    },
+    {
+      id: 'BUS-04',
+      type: 'gse',
+      subType: 'bus',
+      route: 'Remote Stand Shuttle · Pier B ↔ Stand 15',
+      m: makeApronBus(C.navy),
+      status: 'En Route',
+      kmh: 34,
+      delayed: false,
+      spd: 5.4,
+      d: busLoop.T * 0.375, // evenly spaced
+      lp: { ...busLoop, v: 3.2 },
+    },
+    {
+      id: 'BUS-05',
+      type: 'gse',
+      subType: 'bus',
+      route: 'Crew Transport · Operations Base ↔ Gate A1',
+      m: makeApronBus(0xd9381e),
+      status: 'Crew Transfer',
+      kmh: 29,
+      delayed: false,
+      spd: 4.9,
+      d: busLoop.T * 0.50, // evenly spaced
+      lp: { ...busLoop, v: 3.2 },
+    },
+    {
+      id: 'BUS-06',
+      type: 'gse',
+      subType: 'bus',
+      route: 'International Arrivals · Immigration ↔ Terminal',
+      m: makeApronBus(0x8a2be2),
+      status: 'Passenger Disembark',
+      kmh: 31,
+      delayed: false,
+      spd: 5.1,
+      d: busLoop.T * 0.625, // evenly spaced
+      lp: { ...busLoop, v: 3.2 },
+    },
+    {
+      id: 'BUS-07',
+      type: 'gse',
+      subType: 'bus',
+      route: 'Hangar Transfer · Maintenance Bay ↔ Apron',
+      m: makeApronBus(0x0e7c61),
+      status: 'Service Active',
+      kmh: 27,
+      delayed: false,
+      spd: 4.7,
+      d: busLoop.T * 0.75, // evenly spaced
+      lp: { ...busLoop, v: 3.2 },
+    },
+    {
+      id: 'BUS-08',
+      type: 'gse',
+      subType: 'bus',
+      route: 'VIP Lounge · Private Terminal ↔ Gate C2',
+      m: makeApronBus(0xd9801a),
+      status: 'VIP Transport',
+      kmh: 26,
+      delayed: false,
+      spd: 4.6,
+      d: busLoop.T * 0.875, // evenly spaced
       lp: { ...busLoop, v: 3.2 },
     },
   ];
 
-  // Lane 2: Inner Baggage Service Lane (z = 12 to 20, 16m away from bus lane)
-  // Baggage trains ONLY run here, never on bus lane or through buildings!
-  const bagLoop = loopPts(-105, 105, 12, 20, 3.8);
+  // FIX 2: Baggage loop on completely separate road: z=48 to z=62 (clear of bus z=8-28)
+  const bagLoop = loopPts(-75, 75, 48, 62, 4.0);
   const baggageTrains: AirportFlight[] = [
     {
       id: 'BAG-04',
@@ -1013,8 +1334,9 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     lp: { ...followMeLoop, v: 5.5 },
   };
 
-  // Lane 4: Landside Terminal Access Road (z = -94 to -104, in front of terminal)
-  const taxiLoop = loopPts(-85, 85, -104, -94, 4.5);
+  // Lane 4: Landside Terminal Taxi Stand & Access Road
+  // FIX: Taxis must be VISIBLE at taxi stand zone (z = -130 to -170, x = 15 to 75)
+  const taxiLoop = loopPts(15, 75, -160, -135, 4.5);
   const taxis: AirportFlight[] = [
     {
       id: 'TAXI-22',
@@ -1039,10 +1361,43 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
       kmh: 38,
       delayed: false,
       spd: 6.2,
-      d: taxiLoop.T * 0.50, // 180° away from TAXI-22
+      d: taxiLoop.T * 0.33, // 1/3 around loop
+      lp: { ...taxiLoop, v: 3.8 },
+    },
+    {
+      id: 'TAXI-91',
+      type: 'taxi',
+      subType: 'taxi',
+      route: 'Taxi Queue · Waiting for Passenger',
+      m: makeTaxi(),
+      status: 'Queued',
+      kmh: 28,
+      delayed: false,
+      spd: 5.5,
+      d: taxiLoop.T * 0.66, // 2/3 around loop
       lp: { ...taxiLoop, v: 3.8 },
     },
   ];
+
+  // Add stationary taxis parked at taxi stand shelters
+  const stationaryTaxis: AirportFlight[] = [];
+  [35, 45, 55].forEach((tx, idx) => {
+    const taxiParked: AirportFlight = {
+      id: `TAXI-${100 + idx}`,
+      type: 'taxi',
+      subType: 'taxi',
+      route: 'Taxi Stand · Awaiting Passenger',
+      m: makeTaxi(),
+      status: 'At Stand',
+      kmh: 0,
+      delayed: false,
+      spd: 0,
+      d: 0,
+    };
+    taxiParked.m.position.set(tx, 0, -150);
+    taxiParked.m.rotation.y = Math.PI / 2;
+    stationaryTaxis.push(taxiParked);
+  });
 
   // Selection ring
   const ring = new THREE.Mesh(
@@ -1063,6 +1418,7 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     ...baggageTrains,
     followMe,
     ...taxis,
+    ...stationaryTaxis,
     ...gateGSE,
   ];
 
