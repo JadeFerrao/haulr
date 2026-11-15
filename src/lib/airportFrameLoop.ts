@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AirportSceneState } from './airportScene';
+import type { AirportSceneState, AirportFlight } from './airportScene';
 import { at, smooth } from './threeHelpers';
 
 export function runAirportFrame(
@@ -119,89 +119,80 @@ export function runAirportFrame(
   }
 
   // ── 3. COMPLETE GATE PARKING CYCLE (SQ-012) ──────────────────────────────────
-  // Docks at Gate C2 (east side of Concourse C, x=90, z=-24)
-  // Planes park PARALLEL to wall, nose east. SQ-012 taxies FROM WEST, turns south,
-  // drives east into parking slot. NO REVERSING — head first the whole way.
-  // Gate C2 (not modelled as static, so SQ-012 uses a fresh slot):
-  //   plane parks at x=88, z=-24, rotation.y=-PI/2 (nose east)
-  //   door at (88+6.2, -24+1.25) = (94.2, -22.75)
+  // User Requirement 1: "when planes are docking/parking - buses should stop let planes pass"
+  // User Requirement 5: "i can still see planes inside the building!! - fix!!!"
+  // Docks at Gate C2 (x = 105, z = 6) — 100% OUTSIDE Concourse C (which is x=71 to 89)!
+  // Planes park NOSE-WEST (-Math.PI/2) into stand, door 1L connects to Gate C2 jetbridge!
   const dp = state._dockingPlane;
-  dp.progress = ((dp.progress ?? 0) + dt * 0.020) % 1;
+  dp.progress = ((dp.progress ?? 0) + dt * 0.018) % 1;
   const pDock = dp.progress;
 
-  // heading east = rotation.y = -PI/2  (nose points +X)
-  const qNoseEast = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), -Math.PI/2);
-  // heading south = rotation.y = PI (nose points -Z)  — used while taxying from runway
-  const qNoseSouth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI);
-  // heading west = rotation.y = PI/2
-  const qNoseWest = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI/2);
+  const qNoseEast = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+  const qNoseNorth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+  const qNoseWest = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
+  const qNoseSouth = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0);
 
-  if (pDock < 0.18) {
-    // Phase 1: Arrive from west on taxiway z=55 (clear of AF-402 zone z=75), heading east
-    const t = pDock / 0.18;
-    dp.m.position.set(-90 + t * 170, 1.8, 55);
-    dp.m.quaternion.copy(qEast);
+  if (pDock < 0.20) {
+    // Phase 1: Arrive from west along Taxiway Alpha (z = 58, heading East)
+    const t = pDock / 0.20;
+    const x = -60 + t * 165;
+    dp.m.position.set(x, 1.8, 58);
+    dp.m.quaternion.copy(qNoseEast);
     dp.status = 'Taxiing via Taxiway Alpha';
     dp.kmh = 24;
-  } else if (pDock < 0.26) {
-    // Phase 2: Turn south toward gate row (z=55 → z=24)
-    const t = (pDock - 0.18) / 0.08;
-    const angle = Math.PI/2 - smooth(t) * Math.PI; // east (PI/2) → south (PI+PI/2 = -PI/2... )
-    // simpler: interpolate from qEast to qNoseSouth
-    dp.m.quaternion.slerpQuaternions(qEast, qNoseSouth, smooth(t));
-    dp.m.position.set(80, 1.8, 55 - smooth(t) * 31);
-    dp.status = 'Turning South to Gate Row';
+  } else if (pDock < 0.30) {
+    // Phase 2: Turn north to Gate C2 lead-in line at x = 105 (z: 58 -> 24)
+    // Crosses across apron service road (z=40). Vehicles yield and stop 15-20m away!
+    const t = (pDock - 0.20) / 0.10;
+    dp.m.quaternion.slerpQuaternions(qNoseEast, qNoseNorth, smooth(t));
+    dp.m.position.set(105, 1.8, 58 - smooth(t) * 34);
+    dp.status = 'Turning North to Gate C2';
     dp.kmh = 14;
-  } else if (pDock < 0.34) {
-    // Phase 3: Head south along gate lead-in line (nose leads, head first)
-    const t = (pDock - 0.26) / 0.08;
-    dp.m.position.set(88, 1.8, 24 - smooth(t) * 48); // 24 → -24
-    dp.m.quaternion.copy(qNoseSouth);
-    dp.status = 'Taxiing to Gate Stand';
-    dp.kmh = 12;
-  } else if (pDock < 0.42) {
-    // Phase 4: Turn nose to face east — park parallel (head-first into slot)
-    const t = (pDock - 0.34) / 0.08;
-    dp.m.quaternion.slerpQuaternions(qNoseSouth, qNoseEast, smooth(t));
-    dp.m.position.set(88, 1.8, -24);
-    dp.status = 'Aligning to Gate C2';
-    dp.kmh = 6;
-  } else if (pDock < 0.60) {
-    // Phase 5: PARKED at Gate C2 — engines off, services
-    dp.m.position.set(88, 1.8, -24);
-    dp.m.quaternion.copy(qNoseEast);
-    dp.status = 'Gate C2 · Boarding & Refueling';
+  } else if (pDock < 0.40) {
+    // Phase 3: Approach Gate C2 along lead-in line, align head-first facing West into stand
+    const t = (pDock - 0.30) / 0.10;
+    dp.m.quaternion.slerpQuaternions(qNoseNorth, qNoseWest, smooth(t));
+    dp.m.position.set(105, 1.8, 24 - smooth(t) * 18);
+    dp.status = 'Aligning to Gate C2 Stand';
+    dp.kmh = 10;
+  } else if (pDock < 0.62) {
+    // Phase 4: PARKED at Gate C2 — engines shut down, jetbridge cab connected, servicing active
+    dp.m.position.set(105, 1.8, 6);
+    dp.m.quaternion.copy(qNoseWest);
+    dp.status = 'Gate C2 · Docked & Boarding';
     dp.kmh = 0;
     if (state._dockingBridgeCab) {
-      state._dockingBridgeCab.position.set(94.2, 2.7, -22.75);
+      state._dockingBridgeCab.position.set(98.8, 2.7, 7.25);
     }
-  } else if (pDock < 0.68) {
-    // Phase 6: PUSHBACK — tug pushes plane BACKWARD (nose still east, plane rolls west)
-    // This is the only time plane moves opposite to nose direction — tug-driven
-    const t = (pDock - 0.60) / 0.08;
-    dp.m.position.set(88 - smooth(t) * 20, 1.8, -24); // pushed west 20m
-    dp.m.quaternion.copy(qNoseEast);
-    dp.status = 'Tug Pushback · Clearing Gate';
+  } else if (pDock < 0.72) {
+    // Phase 5: PUSHBACK — Tug pushes aircraft backward (South, z: 6 -> 36)
+    const t = (pDock - 0.62) / 0.10;
+    if (state._dockingBridgeCab) {
+      state._dockingBridgeCab.position.set(95.0, 2.7, 7.25); // retracted
+    }
+    dp.m.position.set(105, 1.8, 6 + smooth(t) * 30);
+    dp.m.quaternion.copy(qNoseWest);
+    dp.status = 'Tug Pushback · Clearing Stand';
     dp.kmh = Math.round(smooth(t) * 8);
-  } else if (pDock < 0.76) {
-    // Phase 7: Turn nose to face west (ready to taxi to runway)
-    const t = (pDock - 0.68) / 0.08;
-    dp.m.quaternion.slerpQuaternions(qNoseEast, qNoseWest, smooth(t));
-    dp.m.position.set(68, 1.8, -24 + smooth(t) * 10);
-    dp.status = 'Turning to Taxiway';
+  } else if (pDock < 0.82) {
+    // Phase 6: Turn towards taxiway heading West (z: 36 -> 58)
+    const t = (pDock - 0.72) / 0.10;
+    dp.m.quaternion.copy(qNoseWest);
+    dp.m.position.set(105 - smooth(t) * 15, 1.8, 36 + smooth(t) * 22);
+    dp.status = 'Starting Taxi to Rwy 09L';
     dp.kmh = 12;
-  } else if (pDock < 0.90) {
-    // Phase 8: Taxi west to runway on z=55 taxiway (head first, nose leads west)
-    const t = (pDock - 0.76) / 0.14;
-    dp.m.position.set(68 - smooth(t) * 158, 1.8, 55);
+  } else if (pDock < 0.94) {
+    // Phase 7: Taxi west along Taxiway Alpha (x: 90 -> -70 at z = 58)
+    const t = (pDock - 0.82) / 0.12;
+    dp.m.position.set(90 - t * 160, 1.8, 58);
     dp.m.quaternion.copy(qNoseWest);
     dp.status = 'Taxiing to Runway 09L';
     dp.kmh = 22;
   } else {
-    // Phase 9: Hold short runway, wait for clear
-    dp.m.position.set(-90, 1.8, 55);
+    // Phase 8: Hold short Runway 09L
+    dp.m.position.set(-70, 1.8, 58);
     dp.m.quaternion.copy(qNoseWest);
-    dp.status = 'Holding Short Runway';
+    dp.status = 'Holding Short Runway 09L';
     dp.kmh = 0;
   }
 
@@ -228,28 +219,113 @@ export function runAirportFrame(
   cp.status = 'Airspace Holding (FL085)';
   cp.kmh = 530;
 
-  // ── 5. PASSENGER BUSES (DEDICATED OUTER CORRIDOR Z = 36 to 46) ───────────────
-  // User Requirement 4 & 6: Dedicated non-overlapping lanes, zero vehicle hits
-  state._buses.forEach(bus => {
-    if (!bus.lp) return;
-    bus.d = (bus.d + bus.spd * dt) % bus.lp.T;
-    const [x, z] = at(bus.lp, bus.d);
-    const [x2, z2] = at(bus.lp, bus.d + 0.6);
-    bus.m.position.set(x, 0, z);
-    bus.m.rotation.y = Math.atan2(-(z2 - z), x2 - x);
+  // ── 5. AIRCRAFT YIELDING & HEADWAY SAFETY CONTROLLER ─────────────────────────
+  // User Requirement 1: "when planes are docking/parking - buses should stop let planes pass
+  // and then move later , same with other vehicles as well (atleast at 10-15m away it should stop)"
+  const movingPlanes = [state._dockingPlane, state._takeoffPlane, state._landingPlane];
+
+  const shouldYieldToAircraft = (vPos: THREE.Vector3): boolean => {
+    for (const plane of movingPlanes) {
+      const pPos = plane.m.position;
+      // Only ground planes moving or in taxi/pushback
+      if (pPos.y < 5 && plane.kmh > 0) {
+        const dist = Math.hypot(vPos.x - pPos.x, vPos.z - pPos.z);
+        // User requested: "atleast at 10-15m away it should stop" -> 20m buffer gives safe 15-20m halt!
+        if (dist < 21) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // User Requirement 3: "buses being merged - ui fix"
+  // Car-following headway distance controller: ensures vehicles maintain safe distance
+  // and never catch up to or merge into each other!
+  const getHeadwayFactor = (v: AirportFlight, group: AirportFlight[]): number => {
+    if (!v.lp) return 1.0;
+    let minAhead = 999;
+    for (const other of group) {
+      if (other === v) continue;
+      let diff = other.d - v.d;
+      while (diff < 0) diff += v.lp.T;
+      if (diff < minAhead) {
+        minAhead = diff;
+      }
+    }
+    // Hard stop if vehicle ahead is closer than 13m
+    if (minAhead < 13) return 0;
+    // Smooth deceleration if within 22m
+    if (minAhead < 22) return (minAhead - 13) / 9;
+    return 1.0;
+  };
+
+  // ── 6. LOW-FLOOR PASSENGER BUSES & MOBILE SERVICE GSE ───────────────────────
+  // Road is at z = 34 to 46 (separated by 15m+ from aircraft wings at z=20.5 -> Req 2 fixed!)
+  const serviceVehicles = [
+    ...state._buses,
+    ...(state._cateringTrucks ?? []),
+    ...(state._ladderTrucks ?? [])
+  ];
+
+  serviceVehicles.forEach(veh => {
+    if (!veh.lp) return;
+    const [currX, currZ] = at(veh.lp, veh.d);
+    const vPos = new THREE.Vector3(currX, 0, currZ);
+
+    const yieldStop = shouldYieldToAircraft(vPos);
+    const headway = getHeadwayFactor(veh, serviceVehicles);
+    const speedMult = yieldStop ? 0 : headway;
+
+    if (speedMult <= 0.05) {
+      veh.kmh = 0;
+      veh.status = yieldStop ? 'Holding for Aircraft' : 'Traffic Spacing';
+    } else {
+      veh.kmh = Math.round((veh.spd ?? 4.8) * 6.2 * speedMult);
+      veh.status = veh.subType === 'catering' ? 'Catering En Route' :
+                   veh.subType === 'ladder' ? 'Stairs En Route' :
+                   'Passenger Transfer';
+      veh.d = (veh.d + (veh.spd ?? 4.8) * speedMult * dt) % veh.lp.T;
+    }
+
+    const [x, z] = at(veh.lp, veh.d);
+    const [x2, z2] = at(veh.lp, veh.d + 0.6);
+    veh.m.position.set(x, 0, z);
+    veh.m.rotation.y = Math.atan2(-(z2 - z), x2 - x);
   });
 
-  // ── 6. BAGGAGE TRAINS (DEDICATED INNER ROAD Z = 12 to 20) ────────────────────
-  state._baggageTrains.forEach(v => {
-    if (!v.lp) return;
-    v.d = (v.d + v.spd * dt) % v.lp.T;
-    const [x, z] = at(v.lp, v.d);
-    const [x2, z2] = at(v.lp, v.d + 0.6);
-    v.m.position.set(x, 0, z);
-    v.m.rotation.y = Math.atan2(-(z2 - z), x2 - x);
+  // ── 7. BAGGAGE TRACTORS HAULING 3-CART LUGGAGE TRAINS ────────────────────────
+  // User Requirement 4: "the carts are moviing in reverse!!! - fix"
+  // User Requirement 6: "Baggage tractors hauling 3-cart luggage trains"
+  // In Three.js: Model native forward direction is +Z. Tangent vector is (x2 - x, z2 - z).
+  // Math.atan2(dx, dz) rotates the tractor +Z nose to lead FORWARD along travel direction!
+  // No reversing! The tractor leads forward and the 3 carts follow behind!
+  state._baggageTrains.forEach(train => {
+    if (!train.lp) return;
+    const [currX, currZ] = at(train.lp, train.d);
+    const vPos = new THREE.Vector3(currX, 0, currZ);
+
+    const yieldStop = shouldYieldToAircraft(vPos);
+    const headway = getHeadwayFactor(train, state._baggageTrains);
+    const speedMult = yieldStop ? 0 : headway;
+
+    if (speedMult <= 0.05) {
+      train.kmh = 0;
+      train.status = yieldStop ? 'Holding for Aircraft' : 'Traffic Spacing';
+    } else {
+      train.kmh = Math.round((train.spd ?? 3.8) * 5.8 * speedMult);
+      train.status = 'Baggage Dispatch';
+      train.d = (train.d + (train.spd ?? 3.8) * speedMult * dt) % train.lp.T;
+    }
+
+    const [x, z] = at(train.lp, train.d);
+    const [x2, z2] = at(train.lp, train.d + 0.6);
+    train.m.position.set(x, 0, z);
+    // FIX (Req 4): Correct forward heading angle — tractor leads, 3 carts follow!
+    train.m.rotation.y = Math.atan2(x2 - x, z2 - z);
   });
 
-  // ── 7. FOLLOW-ME SAFETY TRUCK (RUNWAY PATROL Z = 62 to 70) ───────────────────
+  // ── 8. FOLLOW-ME SAFETY TRUCK (RUNWAY PATROL Z = 64 to 72) ───────────────────
   const flw = state._followMe;
   if (flw && flw.lp) {
     flw.d = (flw.d + flw.spd * dt) % flw.lp.T;
@@ -259,7 +335,7 @@ export function runAirportFrame(
     flw.m.rotation.y = Math.atan2(-(z2 - z), x2 - x);
   }
 
-  // ── 8. CITY TAXIS (TERMINAL FRONTAGE ROAD Z = -94 to -104) ───────────────────
+  // ── 9. CITY TAXIS (TERMINAL FRONTAGE ROAD Z = -160 to -135) ──────────────────
   state._taxis.forEach(t => {
     if (!t.lp) return;
     t.d = (t.d + t.spd * dt) % t.lp.T;

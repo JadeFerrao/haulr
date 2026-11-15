@@ -256,7 +256,12 @@ export default function NetworkView() {
             if (f.subType === 'landing') f.eta.textContent = 'On Final';
             else if (f.subType === 'takeoff') f.eta.textContent = 'Departing';
             else if (f.subType === 'cruise') f.eta.textContent = 'En Route';
-            else if (f.subType === 'parked') f.eta.textContent = 'Gate';
+            else if (f.subType === 'parked') f.eta.textContent = 'Gate Stand';
+            else if (f.subType === 'docking') f.eta.textContent = 'Gate C2 Dock';
+            else if (f.subType === 'catering') f.eta.textContent = 'Inflight Catering';
+            else if (f.subType === 'ladder') f.eta.textContent = 'Boarding Stairs';
+            else if (f.subType === 'baggage') f.eta.textContent = 'Luggage Train';
+            else if (f.subType === 'bus') f.eta.textContent = 'Tarmac Transfer';
             else f.eta.textContent = 'Apron GSE';
           }
           if (f.bar) {
