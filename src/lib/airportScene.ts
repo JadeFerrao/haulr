@@ -7,7 +7,7 @@ import {
 export interface AirportFlight {
   id: string;
   type: 'airliner' | 'gse' | 'taxi' | 'car';
-  subType: 'landing' | 'takeoff' | 'cruise' | 'parked' | 'docking' | 'tug' | 'fuel' | 'ladder' | 'baggage' | 'bus' | 'catering' | 'followme' | 'taxi';
+  subType: 'landing' | 'takeoff' | 'cruise' | 'parked' | 'docking' | 'tug' | 'fuel' | 'ladder' | 'baggage' | 'bus' | 'catering' | 'followme' | 'taxi' | 'car';
   route: string;
   m: THREE.Group;
   status: string;
@@ -57,8 +57,8 @@ export interface AirportSceneState {
   M: AirportMetrics;
   simT: number;
   // internal references for frame loop
-  _takeoffPlane: AirportFlight;
-  _landingPlane: AirportFlight;
+  _takeoffPlane?: AirportFlight;
+  _landingPlane?: AirportFlight;
   _dockingPlane: AirportFlight;
   _cruisingPlane: AirportFlight;
   _buses: AirportFlight[];
@@ -68,6 +68,8 @@ export interface AirportSceneState {
   _followMe: AirportFlight;
   _taxis: AirportFlight[];
   _dockingBridgeCab?: THREE.Group;
+  _carParkLiftGateArm?: THREE.Group;
+  _enteringCar?: AirportFlight;
 }
 
 export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState {
@@ -111,14 +113,15 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   const rwyMat = new THREE.MeshStandardMaterial({ color: dark ? 0x121722 : 0x242a38, roughness: 0.82 });
   const taxiMat = new THREE.MeshStandardMaterial({ color: dark ? 0x192133 : 0x445268, roughness: 0.85 });
 
-  // ── DUAL INDEPENDENT RUNWAYS (ZERO PLANE CONFLICT) ───────────────────────────
-  // Runway 09L (Departures / Takeoffs - EK-204) at rwyZ = 82
-  // Runway 09R (Arrivals / Landings - AF-402) at rwyZ = 120
-  // Separated by 38 meters laterally!
-  const rwyLen = 360, rwyWid = 16;
+  // ── DUAL INDEPENDENT RUNWAYS (SPACED FAR FROM APRON VEHICLES) ───────────────
+  // User Requirement 2: "keep them away from runway so colliding doesnt take place"
+  // Runway 09L/27R (Takeoffs: EK-204 Eastbound, SQ-012 Westbound) at rwyZ = 106
+  // Runway 09R (Arrivals / Landings - AF-402) at rwyZ = 145
+  // Separated by 39 meters laterally, and 58+ meters south of all ground vehicles!
+  const rwyLen = 380, rwyWid = 18;
   const RWYS = [
-    { z: 82, name: '09L' },
-    { z: 120, name: '09R' },
+    { z: 106, name: '09L/27R' },
+    { z: 145, name: '09R' },
   ];
 
   // ── PROMINENT "AIRPORT" 3D HOARDING SIGNS ON BOTH SIDES ─────────────────────
@@ -243,70 +246,90 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     });
   });
 
-  // Approach lighting towers leading to Runway 09L & 09R
+  // Approach lighting towers leading to Runway 09L/27R (z = 106)
   for (let k = 1; k <= 8; k++) {
     const lx = -180 - k * 14;
-    cyl(0.18, 0.18, 2 + k * 0.45, C.mast, lx, 1 + k * 0.22, 82, 8, S);
+    cyl(0.18, 0.18, 2 + k * 0.45, C.mast, lx, 1 + k * 0.22, 106, 8, S);
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), appLightMat);
-    lamp.position.set(lx, 2 + k * 0.45, 82);
+    lamp.position.set(lx, 2 + k * 0.45, 106);
     S.add(lamp);
     approachLights.push(lamp);
   }
 
-  // Taxiways connecting Runway 09L to Apron
+  // Taxiways connecting Runway 09L/27R (z = 106) to Taxiway Alpha (z = 74)
   [-130, -65, 0, 65, 130].forEach(x => {
-    const tw = new THREE.Mesh(new THREE.PlaneGeometry(12, 32), taxiMat);
+    const tw = new THREE.Mesh(new THREE.PlaneGeometry(14, 32), taxiMat);
     tw.rotation.x = -Math.PI / 2;
-    tw.position.set(x, 0.235, 66);
+    tw.position.set(x, 0.235, 90);
     tw.receiveShadow = true;
     S.add(tw);
 
     // Yellow taxi centerline
     const yl = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 32), markYellow);
     yl.rotation.x = -Math.PI / 2;
-    yl.position.set(x, 0.25, 66);
+    yl.position.set(x, 0.25, 90);
     S.add(yl);
   });
 
-  // Dedicated Apron Service Road (Buses, Baggage, Catering & Ladder Trucks) at z = 40
-  // Positioned well clear of all aircraft wings (wings end at z = 20.5, road is at z = 36 to 44 -> 15.5m+ safe buffer!)
-  const serviceRoadMat = new THREE.MeshStandardMaterial({ color: dark ? 0x161d2a : 0x2b3446, roughness: 0.88 });
-  const sRoad = new THREE.Mesh(new THREE.PlaneGeometry(280, 8), serviceRoadMat);
-  sRoad.rotation.x = -Math.PI / 2;
-  sRoad.position.set(10, 0.235, 40);
-  sRoad.receiveShadow = true;
-  S.add(sRoad);
-
-  // White road boundary lines
-  [-3.8, 3.8].forEach(zOff => {
-    const edge = new THREE.Mesh(new THREE.PlaneGeometry(280, 0.25), markWhite);
-    edge.rotation.x = -Math.PI / 2;
-    edge.position.set(10, 0.245, 40 + zOff);
-    S.add(edge);
-  });
-
-  // Dashed yellow centerline along the Apron Service Road
-  for (let x = -125; x <= 145; x += 7) {
-    const dash = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.25), markYellow);
-    dash.rotation.x = -Math.PI / 2;
-    dash.position.set(x, 0.246, 40);
-    S.add(dash);
-  }
-
-  // Parallel Aircraft Taxiway Alpha (connecting Apron to Runways) at z = 58
-  const pTw = new THREE.Mesh(new THREE.PlaneGeometry(310, 12), taxiMat);
+  // Dedicated Parallel Aircraft Taxiway Alpha at z = 74 (PLANES ONLY!)
+  // Separated by 26+ meters from vehicle roads (z <= 48) — ZERO VEHICLE CONFLICT!
+  const pTw = new THREE.Mesh(new THREE.PlaneGeometry(330, 14), taxiMat);
   pTw.rotation.x = -Math.PI / 2;
-  pTw.position.set(0, 0.235, 58);
+  pTw.position.set(0, 0.235, 74);
   pTw.receiveShadow = true;
   S.add(pTw);
 
-  const pYl = new THREE.Mesh(new THREE.PlaneGeometry(310, 0.4), markYellow);
+  const pYl = new THREE.Mesh(new THREE.PlaneGeometry(330, 0.4), markYellow);
   pYl.rotation.x = -Math.PI / 2;
-  pYl.position.set(0, 0.25, 58);
+  pYl.position.set(0, 0.25, 74);
   S.add(pYl);
 
-  // Red & White hatched safety boxes marking aircraft parking stands (z = -38 to 20)
-  // Shows vehicles where aircraft wingtips and engines are, enforcing apron safety zones
+  // ── DEDICATED APRON VEHICLE ROADS (SPACED WELL AWAY FROM RUNWAYS) ────────────
+  // User Requirement 2: "lot of space for these vehicles to roam keep them away from runway"
+  // Road 1: Low-Floor Passenger Buses & Mobile GSE at z = 32 (z: 28.5 to 35.5)
+  const serviceRoadMat = new THREE.MeshStandardMaterial({ color: dark ? 0x161d2a : 0x2b3446, roughness: 0.88 });
+  const sRoad = new THREE.Mesh(new THREE.PlaneGeometry(280, 7.5), serviceRoadMat);
+  sRoad.rotation.x = -Math.PI / 2;
+  sRoad.position.set(10, 0.235, 32);
+  sRoad.receiveShadow = true;
+  S.add(sRoad);
+
+  // White road boundary lines for Road 1
+  [-3.6, 3.6].forEach(zOff => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(280, 0.25), markWhite);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(10, 0.245, 32 + zOff);
+    S.add(edge);
+  });
+
+  // Road 2: Baggage Tractor Trains & Freight at z = 43 (z: 39.5 to 46.5)
+  const sRoad2 = new THREE.Mesh(new THREE.PlaneGeometry(280, 7.5), serviceRoadMat);
+  sRoad2.rotation.x = -Math.PI / 2;
+  sRoad2.position.set(10, 0.235, 43);
+  sRoad2.receiveShadow = true;
+  S.add(sRoad2);
+
+  [-3.6, 3.6].forEach(zOff => {
+    const edge = new THREE.Mesh(new THREE.PlaneGeometry(280, 0.25), markWhite);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(10, 0.245, 43 + zOff);
+    S.add(edge);
+  });
+
+  // Dashed yellow centerlines along both Apron Service Roads
+  for (let x = -125; x <= 145; x += 7) {
+    const dash1 = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.25), markYellow);
+    dash1.rotation.x = -Math.PI / 2;
+    dash1.position.set(x, 0.246, 32);
+    S.add(dash1);
+
+    const dash2 = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 0.25), markYellow);
+    dash2.rotation.x = -Math.PI / 2;
+    dash2.position.set(x, 0.246, 43);
+    S.add(dash2);
+  }
+
+  // Red & White hatched safety boxes marking aircraft parking stands (z = -38 to 21)
   [
     { x: -55, z1: -24, z2: 6 },
     { x: 25, z1: -24, z2: 6 },
@@ -320,7 +343,7 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     });
     const frontBdr = new THREE.Mesh(new THREE.PlaneGeometry(30, 0.3), markRed);
     frontBdr.rotation.x = -Math.PI / 2;
-    frontBdr.position.set(st.x, 0.24, 21); // Safety boundary 21m south, right before vehicle road
+    frontBdr.position.set(st.x, 0.24, 22); // Stand safety boundary at z = 22
     S.add(frontBdr);
   });
 
@@ -340,11 +363,17 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   }
 
   for (let k = 0; k < 420; k++) {
-    const x = -210 + rnd() * 420, z = -190 + rnd() * 340;
-    // Clear of runways and apron
-    if (x > -165 && x < 165 && z > -48 && z < 140) continue;
-    // Clear of terminal & car park
-    if (x > -130 && x < 130 && z > -175 && z < -45) continue;
+    const x = -220 + rnd() * 440, z = -195 + rnd() * 350;
+    // User Requirement 1: "remove trees from runway"
+    // 100% CLEAR OF ENTIRE AIRFIELD, RUNWAYS, TAXIWAYS, AND APRON (z > 45)
+    // Both Runway 09L/27R (z = 106) and Runway 09R (z = 145) are at z > 45, plus Taxiway Alpha (z = 74)
+    if (z > 45) continue;
+    // Clear of terminal complex, concourses, and apron stands
+    if (x > -160 && x < 160 && z > -55) continue;
+    // Clear of car park, taxi ranks, and entrance boulevard
+    if (x > -95 && x < 95 && z > -180 && z < -45) continue;
+    // Clear of ATC tower area (twX = -150, twZ = -75)
+    if (x > -175 && x < -125 && z > -95 && z < -55) continue;
     tree(x, z, 0.8 + rnd() * 0.7);
   }
   tm.count = tn;
@@ -378,28 +407,121 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   box(0.35, 0.35, 43, C.mast, -76.2, 0.25, -150, false, S);
   box(0.35, 0.35, 43, C.mast, -13.8, 0.25, -150, false, S);
 
-  // CAR PARK ENTRY GATE (South entrance at z = -172)
-  box(6.5, 2.8, 0.4, 0xe8850c, -45, 1.6, -172, true, S); // Orange gate booth
-  box(0.25, 0.35, 0.35, 0xff3030, -48.5, 0.4, -172, false, S); // Red barrier arm (lowered)
-  box(0.25, 0.35, 0.35, 0xff3030, -41.5, 0.4, -172, false, S);
-  const entrySign = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.5, 1.2),
-    new THREE.MeshBasicMaterial({ color: 0x2fb5a2 })
-  );
-  entrySign.rotation.y = Math.PI;
-  entrySign.position.set(-45, 3.8, -172.5);
-  S.add(entrySign);
+  // ── 3D HOARDING SIGN: "CAR PARK" ─────────────────────────────────────────────
+  // User Requirement 2: "add a harding 'CAR PARK'"
+  const carParkSignGroup = new THREE.Group();
+  
+  // Steel support pillars (two robust pylons)
+  cyl(0.35, 0.35, 7.5, 0x223046, -56, 3.75, -174, 12, carParkSignGroup);
+  cyl(0.35, 0.35, 7.5, 0x223046, -34, 3.75, -174, 12, carParkSignGroup);
+
+  // Large billboard hoarding (28m wide, 4.6m high, white frame with deep navy face)
+  box(28, 4.6, 0.7, 0x0a1e3f, -45, 6.8, -174, true, carParkSignGroup);
+  box(28.6, 5.0, 0.5, 0xffffff, -45, 6.8, -174.2, false, carParkSignGroup);
+  
+  // Overhead floodlight armature
+  box(26, 0.25, 0.8, 0x475569, -45, 9.3, -173.6, false, carParkSignGroup);
+
+  // Blue Parking [P] badge on left
+  box(3.2, 3.2, 0.4, 0x1d4ed8, -55.5, 6.8, -173.5, false, carParkSignGroup);
+  box(3.4, 3.4, 0.2, 0xffffff, -55.5, 6.8, -173.7, false, carParkSignGroup);
+  // 'P' letter inside badge
+  box(0.42, 2.2, 0.3, 0xffffff, -56.2, 6.8, -173.2, false, carParkSignGroup);
+  box(1.1, 0.38, 0.3, 0xffffff, -55.3, 7.7, -173.2, false, carParkSignGroup);
+  box(1.1, 0.38, 0.3, 0xffffff, -55.3, 6.9, -173.2, false, carParkSignGroup);
+  box(0.38, 1.1, 0.3, 0xffffff, -54.7, 7.3, -173.2, false, carParkSignGroup);
+
+  // 3D Block Text: "CAR PARK"
+  const addLetterBox = (w: number, h: number, lx: number, ly: number, col = 0xffffff) => {
+    box(w, h, 0.4, col, lx, ly, -173.4, false, carParkSignGroup);
+  };
+
+  const drawLetter = (char: string, cx: number, cy: number) => {
+    const col = 0xffffff;
+    switch (char) {
+      case 'C':
+        addLetterBox(0.45, 2.4, cx - 0.8, cy, col);
+        addLetterBox(1.7, 0.42, cx, cy + 0.99, col);
+        addLetterBox(1.7, 0.42, cx, cy - 0.99, col);
+        break;
+      case 'A':
+        addLetterBox(0.42, 2.4, cx - 0.7, cy, col);
+        addLetterBox(0.42, 2.4, cx + 0.7, cy, col);
+        addLetterBox(1.6, 0.42, cx, cy + 0.99, col);
+        addLetterBox(1.3, 0.38, cx, cy, col);
+        break;
+      case 'R':
+        addLetterBox(0.42, 2.4, cx - 0.7, cy, col);
+        addLetterBox(1.3, 0.42, cx - 0.05, cy + 0.99, col);
+        addLetterBox(1.3, 0.38, cx - 0.05, cy + 0.15, col);
+        addLetterBox(0.42, 1.1, cx + 0.5, cy + 0.57, col);
+        addLetterBox(0.45, 1.25, cx + 0.45, cy - 0.6, col);
+        break;
+      case 'P':
+        addLetterBox(0.42, 2.4, cx - 0.7, cy, col);
+        addLetterBox(1.3, 0.42, cx - 0.05, cy + 0.99, col);
+        addLetterBox(1.3, 0.38, cx - 0.05, cy + 0.15, col);
+        addLetterBox(0.42, 1.1, cx + 0.5, cy + 0.57, col);
+        break;
+      case 'K':
+        addLetterBox(0.42, 2.4, cx - 0.7, cy, col);
+        addLetterBox(0.45, 1.35, cx + 0.35, cy + 0.55, col);
+        addLetterBox(0.45, 1.35, cx + 0.35, cy - 0.55, col);
+        break;
+    }
+  };
+
+  // Render "CAR"
+  drawLetter('C', -50.8, 6.8);
+  drawLetter('A', -47.8, 6.8);
+  drawLetter('R', -44.8, 6.8);
+
+  // Render "PARK"
+  drawLetter('P', -40.6, 6.8);
+  drawLetter('A', -37.6, 6.8);
+  drawLetter('R', -34.6, 6.8);
+  drawLetter('K', -31.6, 6.8);
+
+  S.add(carParkSignGroup);
+
+  // ── MOTORIZED LIFT GATE & CONTROL BOOTH ─────────────────────────────────────
+  // User Requirement 2: "i need a proper lift gate - so cars stop then gate lift thrn cars enter into parking"
+  // Concrete traffic median island
+  box(1.2, 0.28, 4.8, 0xced4da, -47.6, 0.14, -171.5, false, S);
+  
+  // Toll / security attendant booth
+  box(3.2, 2.8, 3.2, dark ? 0x1e293b : 0xe2e8f0, -50.2, 1.5, -171.5, true, S);
+  box(3.4, 0.35, 3.4, 0x0f172a, -50.2, 3.05, -171.5, false, S); // roof
+  box(2.8, 1.2, 3.24, C.glass, -50.2, 1.7, -171.5, false, S); // windows
+  
+  // Motorized barrier cabinet (yellow/orange pedestal)
+  box(0.55, 1.35, 0.55, 0xf59e0b, -47.5, 0.8, -171.5, true, S);
+  box(0.58, 0.15, 0.58, 0x1e293b, -47.5, 1.45, -171.5, false, S); // top cap
+  cyl(0.12, 0.12, 0.18, 0xef4444, -47.5, 1.6, -171.5, 8, S); // status light
+  
+  // Ticket machine & NFC contactless reader kiosk
+  box(0.4, 1.15, 0.35, 0x334155, -47.5, 0.7, -173.0, true, S);
+  box(0.24, 0.16, 0.05, 0x10b981, -47.5, 0.9, -172.8, false, S); // green display
+
+  // The Lift Arm Group (Pivot at x = -47.2, y = 1.15, z = -171.5)
+  const carParkLiftGateArm = new THREE.Group();
+  carParkLiftGateArm.position.set(-47.2, 1.15, -171.5);
+  // Cylindrical pivot hub
+  cyl(0.18, 0.18, 0.26, 0x1e293b, 0, 0, 0, 12, carParkLiftGateArm);
+  // Striped reflective boom arm (spans across the lane in +X from x=0 to x=3.8m)
+  for (let bi = 0; bi < 6; bi++) {
+    const col = bi % 2 === 0 ? 0xef4444 : 0xffffff;
+    box(0.6, 0.12, 0.06, col, 0.35 + bi * 0.6, 0, 0, false, carParkLiftGateArm);
+  }
+  // Soft rubber tip
+  box(0.15, 0.14, 0.08, 0x111827, 3.85, 0, 0, false, carParkLiftGateArm);
+  S.add(carParkLiftGateArm);
 
   // CAR PARK EXIT GATE (North exit at z = -128)
-  box(6.5, 2.8, 0.4, 0xe8850c, -45, 1.6, -128, true, S);
-  box(0.25, 0.35, 0.35, 0x2fb5a2, -48.5, 0.4, -128, false, S); // Green barrier (open)
-  box(0.25, 0.35, 0.35, 0x2fb5a2, -41.5, 0.4, -128, false, S);
-  const exitSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.5, 1.2),
-    new THREE.MeshBasicMaterial({ color: 0xff8c00 })
-  );
-  exitSign.position.set(-45, 3.8, -127.5);
-  S.add(exitSign);
+  box(3.2, 2.8, 3.2, dark ? 0x1e293b : 0xe2e8f0, -50.2, 1.5, -128, true, S);
+  box(3.4, 0.35, 3.4, 0x0f172a, -50.2, 3.05, -128, false, S);
+  box(0.55, 1.35, 0.55, 0x10b981, -47.5, 0.8, -128, true, S); // Green exit pedestal
+  box(3.8, 0.12, 0.06, 0x10b981, -45.3, 1.15, -128, false, S); // Green open barrier arm
 
   // Overhead parking lot lighting
   [-58, -45, -32].forEach(lx => {
@@ -686,18 +808,31 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     }
   });
 
-  // ── AIR TRAFFIC CONTROL (ATC) TOWER ─────────────────────────────────────────
-  const twX = -100, twZ = -46;
-  cyl(2.2, 3.4, 38, C.bld, twX, 19, twZ, 12, S);
-  cyl(5.6, 4.0, 5.6, C.glass, twX, 39.5, twZ, 12, S);
-  cyl(6.2, 6.2, 0.8, C.roof, twX, 42.6, twZ, 12, S);
-  cyl(0.25, 0.25, 4.5, C.mast, twX, 45.4, twZ, 8, S);
-  const radar = box(4.8, 0.45, 0.45, C.navy, twX, 47.8, twZ, true, S) as unknown as THREE.Mesh;
+  // ── AIR TRAFFIC CONTROL (ATC) TOWER (DISTANCED FROM AIRPORT BUILDINGS) ──────
+  // User Requirement 3: "tower away from airport - distance it"
+  // Moved from twX=-100, twZ=-46 (which clipped the terminal building!)
+  // to twX = -150, twZ = -75 on its own dedicated stand-alone compound on the airfield perimeter!
+  const twX = -150, twZ = -75;
+
+  // Dedicated circular concrete foundation pad
+  cyl(12, 12, 0.4, C.slab, twX, 0.2, twZ, 24, S);
+  // Security perimeter curb around the tower base
+  cyl(12.5, 12.5, 0.35, C.warn, twX, 0.3, twZ, 24, S);
+  // ATC Ground Operations Annex building
+  box(9.0, 3.2, 7.0, C.bld, twX + 7, 1.6, twZ, true, S);
+  box(9.5, 0.4, 7.5, C.roof, twX + 7, 3.4, twZ, true, S);
+
+  // Tower shaft & observation cab
+  cyl(2.4, 3.6, 42, C.bld, twX, 21, twZ, 14, S);
+  cyl(6.2, 4.4, 6.2, C.glass, twX, 43.5, twZ, 14, S);
+  cyl(7.0, 7.0, 0.9, C.roof, twX, 47.0, twZ, 14, S);
+  cyl(0.25, 0.25, 5.0, C.mast, twX, 50.0, twZ, 8, S);
+  const radar = box(5.2, 0.45, 0.45, C.navy, twX, 52.8, twZ, true, S) as unknown as THREE.Mesh;
   const radars: THREE.Mesh[] = [radar];
 
   const beaconM = bas(0x2fe08a);
-  const beaconSph = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 10), beaconM);
-  beaconSph.position.set(twX, 48.7, twZ);
+  const beaconSph = new THREE.Mesh(new THREE.SphereGeometry(0.85, 10, 10), beaconM);
+  beaconSph.position.set(twX, 53.8, twZ);
   S.add(beaconSph);
 
   // ── DETAILED AIRPLANE MODEL BUILDER ─────────────────────────────────────────
@@ -1243,15 +1378,18 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   gateGSE[5].m.position.set(110, 0, -26);  // Catering scissor truck at AF-114 right galley door
   gateGSE[5].m.rotation.y = Math.PI;
 
-  // ── 5. DYNAMIC ACTIVE FLIGHTS ───────────────────────────────────────────────
+  // ── 5. ACTIVE AIRPORT FLIGHTS ───────────────────────────────────────────────
+  // Flight 1: Active Takeoff in Opposite Direction on 1st Runway (EK-204)
+  // User Requirement 3: "you can add another plane on 1st runway just taking off in opp site direction"
+  // Takes off Eastbound on Runway 09L (z = 106) with 45° steep angle climb, timed so zero runway conflicts with SQ-012!
   const takeoffPlane: AirportFlight = {
     id: 'EK-204',
     type: 'airliner',
     subType: 'takeoff',
-    route: 'Rwy 09L → Dubai DXB (45° Steep Angle Takeoff Climb)',
+    route: 'Rwy 09L → Dubai DXB (Opposite Direction 45° Takeoff Climb)',
     m: makeAirplane(0xd9381e, 1.05),
-    status: 'Takeoff Roll (Rwy 09L)',
-    kmh: 310,
+    status: 'Holding Short Rwy 09L',
+    kmh: 0,
     delayed: false,
     spd: 45,
     d: 0,
@@ -1259,31 +1397,16 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     altitude: 1.8,
   };
 
-  const landingPlane: AirportFlight = {
-    id: 'AF-402',
-    type: 'airliner',
-    subType: 'landing',
-    route: 'Paris CDG → Rwy 09R (Touchdown & Vacate)',
-    m: makeAirplane(C.blue, 1.05),
-    status: 'Final Approach (Rwy 09R)',
-    kmh: 240,
-    delayed: false,
-    spd: 35,
-    d: 0,
-    progress: 0.5,
-    altitude: 50,
-  };
-
-  // Flight 3: Live Docking Flight (SQ-012)
-  // FIX (Req 1 & 5): Docks at Gate C2 (x = 105, z = 6) — 100% OUTSIDE building!
+  // Flight 2: Live Full-Circuit Flight (SQ-012)
+  // Docks at Gate C2 (x = 105, z = 6) — 100% OUTSIDE building with connected jetbridge!
   const dockingPlane: AirportFlight = {
     id: 'SQ-012',
     type: 'airliner',
     subType: 'docking',
-    route: 'Singapore SIN → Taxiing & Docking at Gate C2',
+    route: 'Singapore SIN → Changi · Active Flight Circuit & Gate C2 Dock',
     m: makeAirplane(0x0e7c61, 1.0),
-    status: 'Taxiing to Gate C2',
-    kmh: 22,
+    status: 'Gate C2 · Pre-Flight & Boarding',
+    kmh: 0,
     delayed: false,
     spd: 20,
     d: 0,
@@ -1306,11 +1429,32 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     altitude: 85,
   };
 
-  // ── 6. DEDICATED APRON VEHICLE LANES & ACTIVE GSE FLEET ─────────────────────
-  // Parked planes: z = -24 & 6. Wingspan ends at z = 20.5!
-  // FIX (Req 2): Bus & GSE loop at z = 34 to 46 -> 13.5m+ clear space from wings!
-  // Buses will NEVER pass through any airplane wings!
-  const busLoop = loopPts(-95, 120, 34, 46, 5.0);
+  // User Requirement 2: Car that stops at lift gate then enters car park
+  const enteringCar: AirportFlight = {
+    id: 'CAR-01',
+    type: 'car',
+    subType: 'car',
+    route: 'Boulevard → Car Park Entrance (Gate Cleared)',
+    m: makeRealisticCar('sedan', 0x1e40af),
+    status: 'Approaching Gate',
+    kmh: 24,
+    delayed: false,
+    spd: 15,
+    d: 0,
+    progress: 0,
+    altitude: 0,
+  };
+  S.add(enteringCar.m);
+
+  // ── 6. DEDICATED APRON VEHICLE LANES (SPACED FAR AWAY FROM RUNWAYS) ─────────
+  // User Requirement 2: "lot of space for these vehicles to roam keep them away from runway"
+  // Parked planes wings end at z = 20.5.
+  // Bus Loop: z = 27 to 36 (centered at z = 31.5)
+  // Baggage Loop: z = 39 to 47 (centered at z = 43)
+  // All vehicles stay within z <= 47!
+  // Taxiway Alpha is at z = 74, Runway 09L/27R is at z = 106, Runway 09R is at z = 145!
+  // Distance from vehicles to Runway: 59 to 98 meters! ZERO COLLISION!
+  const busLoop = loopPts(-105, 125, 27, 36, 5.0);
 
   // User Requirement 6: Low-floor airport passenger tarmac transfer buses
   // Spaced evenly around loop, equal base speed to prevent merging!
@@ -1339,8 +1483,8 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
   }));
 
   // User Requirement 6: Baggage tractors hauling 3-cart luggage trains
-  // Dedicated baggage route at z = 50 to 60, clear of bus road and aircraft
-  const bagLoop = loopPts(-90, 115, 50, 60, 4.0);
+  // Dedicated baggage route at z = 39 to 47, completely clear of runway and taxiways!
+  const bagLoop = loopPts(-100, 120, 39, 47, 4.0);
   const baggageTrains: AirportFlight[] = [
     {
       id: 'BAG-01',
@@ -1417,8 +1561,8 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     },
   ];
 
-  // Lane 3: Runway Safety Perimeter Patrol Lane (z = 64 to 72)
-  const followMeLoop = loopPts(-130, 130, 64, 72, 4.0);
+  // Lane 3: Runway Safety Perimeter Patrol Lane (z = 84 to 92)
+  const followMeLoop = loopPts(-130, 130, 84, 92, 4.0);
   const followMe: AirportFlight = {
     id: 'FLW-01',
     type: 'gse',
@@ -1507,10 +1651,10 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
 
   // Combine flights for tracking
   const allFlights: AirportFlight[] = [
-    takeoffPlane,
-    landingPlane,
     dockingPlane,
+    takeoffPlane,
     cruisingPlane,
+    enteringCar,
     ...buses,
     ...parkedPlanes,
     ...baggageTrains,
@@ -1552,7 +1696,6 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     M,
     simT: 0,
     _takeoffPlane: takeoffPlane,
-    _landingPlane: landingPlane,
     _dockingPlane: dockingPlane,
     _cruisingPlane: cruisingPlane,
     _buses: buses,
@@ -1562,5 +1705,7 @@ export function buildAirportScene(canvas: HTMLCanvasElement): AirportSceneState 
     _followMe: followMe,
     _taxis: taxis,
     _dockingBridgeCab: dockingBridgeCabGroup,
+    _carParkLiftGateArm: carParkLiftGateArm,
+    _enteringCar: enteringCar,
   };
 }
