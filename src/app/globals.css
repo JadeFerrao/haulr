@@ -830,6 +830,111 @@ canvas {
   font-size: 12px;
 }
 
+/* ── F1 Circuit Specific Styles ── */
+.f1-dot {
+  background: #e0443a;
+}
+
+.list.f1 #rows {
+  display: none;
+}
+
+.list:not(.f1) #timing {
+  display: none;
+}
+
+.list.collapsed #timing {
+  display: none;
+}
+
+#timing {
+  max-height: min(56vh, 480px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.trow {
+  display: grid;
+  grid-template-columns: 22px 10px 1fr auto 22px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.trow:hover {
+  background: var(--line);
+}
+
+.trow.sel {
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+  outline: 1px solid var(--blue);
+}
+
+.trow:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.trow .p {
+  font-size: 14px;
+}
+
+.trow .chip {
+  width: 8px;
+  height: 22px;
+  border-radius: 3px;
+  display: block;
+}
+
+.trow .d {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.trow .d small {
+  color: var(--mute);
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.trow .g {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+  text-align: right;
+}
+
+.trow .ty {
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+}
+
+.fstate {
+  padding: 4px 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mute);
+  letter-spacing: 0.02em;
+}
+
+.fstate[data-s="red"] {
+  color: #ff5a4d;
+}
+
+.fstate[data-s="green"] {
+  color: var(--ok);
+}
+
 @media (max-width: 1180px) {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));

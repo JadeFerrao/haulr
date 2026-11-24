@@ -627,11 +627,19 @@ export function setActiveAirportSceneState(s: unknown): void {
   activeAirportSceneState = s;
 }
 
-let activeNetworkMode: 'logistics' | 'airport' = 'logistics';
-export function getActiveNetworkMode(): 'logistics' | 'airport' {
+let activeF1SceneState: unknown = null;
+export function getActiveF1SceneState<T>(): T | null {
+  return activeF1SceneState as T | null;
+}
+export function setActiveF1SceneState(s: unknown): void {
+  activeF1SceneState = s;
+}
+
+let activeNetworkMode: 'logistics' | 'airport' | 'f1' = 'logistics';
+export function getActiveNetworkMode(): 'logistics' | 'airport' | 'f1' {
   return activeNetworkMode;
 }
-export function setActiveNetworkMode(m: 'logistics' | 'airport'): void {
+export function setActiveNetworkMode(m: 'logistics' | 'airport' | 'f1'): void {
   activeNetworkMode = m;
 }
 

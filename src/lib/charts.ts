@@ -107,3 +107,64 @@ export function drawWhBars(c: HTMLCanvasElement, WH: { u: number }[]) {
   });
 }
 
+export function drawGapBars(c: HTMLCanvasElement, list: { g: number; col: number; code: string }[]) {
+  const q = fit(c); if (!q) return;
+  const [g, w, h] = q;
+  grid(g, w, h, 3);
+  const mx = Math.max(1, ...list.map(l => l.g)) * 1.15;
+  const bw = w / list.length;
+  g.font = '600 10px Bricolage Grotesque,system-ui,sans-serif';
+  g.textAlign = 'center';
+  list.forEach((l, i) => {
+    const hh = Math.max(3, (l.g / mx) * (h - 26));
+    const x = i * bw + bw * 0.16, ww = bw * 0.68;
+    g.fillStyle = '#' + l.col.toString(16).padStart(6, '0');
+    rr(g, x, h - 16 - hh, ww, hh, 3);
+    g.fill();
+    g.fillStyle = cssv('--mute');
+    g.fillText(l.code, x + ww / 2, h - 3);
+  });
+}
+
+export function drawLapBars(c: HTMLCanvasElement, laps: { t: number; c: number }[], best: number) {
+  const q = fit(c); if (!q || !laps.length) return;
+  const [g, w, h] = q;
+  grid(g, w, h, 3);
+  const mn = Math.min(...laps.map(l => l.t)) * 0.97;
+  const mx = Math.max(...laps.map(l => l.t)) * 1.02;
+  const bw = w / 24;
+  laps.forEach((l, i) => {
+    const hh = Math.max(4, ((l.t - mn) / ((mx - mn) || 1)) * (h - 14));
+    const x = (24 - laps.length + i) * bw + bw * 0.16;
+    g.fillStyle = l.t === best ? cssv('--ok') : cssv('--blue');
+    rr(g, x, h - hh, bw * 0.68, hh, 3);
+    g.fill();
+  });
+}
+
+export function drawTyreBars(c: HTMLCanvasElement, cars: { comp: number }[]) {
+  const q = fit(c); if (!q) return;
+  const [g, w, h] = q;
+  const cnt = [0, 0, 0];
+  cars.forEach(k => cnt[k.comp]++);
+  const COMP = [
+    { n: 'Soft', c: '#ff4b4b' },
+    { n: 'Medium', c: '#ffd23c' },
+    { n: 'Hard', c: '#f4f6ff' },
+  ];
+  g.font = '700 12px Bricolage Grotesque,system-ui,sans-serif';
+  g.textAlign = 'center';
+  COMP.forEach((cp, i) => {
+    const bw = w / 3, x = i * bw + bw * 0.2, ww = bw * 0.6;
+    const hh = Math.max(4, (cnt[i] / 10) * (h - 40));
+    g.fillStyle = cp.c;
+    rr(g, x, h - 22 - hh, ww, hh, 4);
+    g.fill();
+    g.fillStyle = cssv('--ink');
+    g.fillText(String(cnt[i]), x + ww / 2, h - 26 - hh);
+    g.fillStyle = cssv('--mute');
+    g.fillText(cp.n, x + ww / 2, h - 6);
+  });
+}
+
+

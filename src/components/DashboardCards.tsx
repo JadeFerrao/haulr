@@ -4,16 +4,31 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getActiveSceneState,
   getActiveAirportSceneState,
+  getActiveF1SceneState,
   getActiveNetworkMode,
   type SimMetrics,
 } from '@/lib/scene';
 import type { AirportSceneState } from '@/lib/airportScene';
-import { drawStackBars, drawFlightBars, drawLines, drawWhBars, cssv } from '@/lib/charts';
+import type { F1SceneState } from '@/lib/f1Scene';
+import {
+  drawStackBars,
+  drawFlightBars,
+  drawLines,
+  drawWhBars,
+  drawGapBars,
+  drawLapBars,
+  drawTyreBars,
+  cssv,
+} from '@/lib/charts';
 
 const nf = (n: number) => Math.round(n).toLocaleString('en-US');
+const fmtT = (t: number) => {
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + s.toFixed(3);
+};
 
 export default function DashboardCards() {
-  const [currentMode, setCurrentMode] = useState<'logistics' | 'airport'>('logistics');
+  const [currentMode, setCurrentMode] = useState<'logistics' | 'airport' | 'f1'>('logistics');
 
   const c1 = useRef<HTMLCanvasElement>(null);
   const c2 = useRef<HTMLCanvasElement>(null);
@@ -21,7 +36,7 @@ export default function DashboardCards() {
   const c4 = useRef<HTMLCanvasElement>(null);
   const c5 = useRef<HTMLCanvasElement>(null);
 
-  // display refs
+  // Logistics / Airport display refs
   const pdRef = useRef<HTMLDivElement>(null);
   const potRef = useRef<HTMLSpanElement>(null);
   const plRef = useRef<HTMLSpanElement>(null);
@@ -36,6 +51,19 @@ export default function DashboardCards() {
   const waRef = useRef<HTMLDivElement>(null);
   const wuRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<HTMLSpanElement>(null);
+
+  // F1 display refs
+  const fLapRef = useRef<HTMLDivElement>(null);
+  const fPctRef = useRef<HTMLSpanElement>(null);
+  const fFlagRef = useRef<HTMLSpanElement>(null);
+  const fBestRef = useRef<HTMLDivElement>(null);
+  const fBdrvRef = useRef<HTMLSpanElement>(null);
+  const fBlapRef = useRef<HTMLSpanElement>(null);
+  const fPitsRef = useRef<HTMLDivElement>(null);
+  const fPavgRef = useRef<HTMLSpanElement>(null);
+  const fPbestRef = useRef<HTMLSpanElement>(null);
+  const fTrkRef = useRef<HTMLDivElement>(null);
+  const fAirRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     // Shared metric state for logistics
@@ -54,7 +82,63 @@ export default function DashboardCards() {
       const mode = getActiveNetworkMode();
       setCurrentMode(mode);
 
-      if (mode === 'airport') {
+      if (mode === 'f1') {
+        const f1 = getActiveF1SceneState<F1SceneState>();
+        if (!f1) return;
+
+        const order = f1.timing();
+        const lead = order[0];
+        const lapN = Math.max(1, Math.min(10, lead.lap));
+        const phase = f1.getPhase();
+        const flagText = f1.cop.mode === 'lap'
+          ? 'Safety car'
+          : phase === 'grid'
+          ? 'On the grid'
+          : phase === 'lights'
+          ? 'Start lights'
+          : phase === 'race'
+          ? 'Green flag'
+          : phase === 'finish'
+          ? 'Chequered flag'
+          : 'Race over';
+
+        if (fLapRef.current) fLapRef.current.textContent = `Lap ${lapN} / 10`;
+        if (fPctRef.current) fPctRef.current.textContent = `${Math.round(Math.max(0, Math.min(10, lead.lap - 1)) / 10 * 100)}% complete`;
+        if (fFlagRef.current) fFlagRef.current.textContent = flagText;
+
+        const b = f1.ST.best;
+        if (fBestRef.current) fBestRef.current.textContent = b.t < 1e8 ? fmtT(b.t * 3.9) : '—';
+        if (fBdrvRef.current) fBdrvRef.current.textContent = b.t < 1e8 ? `${b.drv} · ${b.team}` : 'No timed laps yet';
+        if (fBlapRef.current) fBlapRef.current.textContent = b.t < 1e8 ? `Lap ${b.lap}` : '';
+
+        const avg = f1.ST.stops.length ? f1.ST.stops.reduce((s, v) => s + v, 0) / f1.ST.stops.length : 0;
+        const bestS = f1.ST.stops.length ? Math.min(...f1.ST.stops) : 0;
+        if (fPitsRef.current) fPitsRef.current.textContent = String(f1.ST.stopN);
+        if (fPavgRef.current) fPavgRef.current.textContent = f1.ST.stops.length ? `avg ${avg.toFixed(1)} s` : 'avg —';
+        if (fPbestRef.current) fPbestRef.current.textContent = f1.ST.stops.length ? `best ${bestS.toFixed(1)} s` : '';
+
+        const rt = f1.getRt();
+        if (fTrkRef.current) fTrkRef.current.textContent = `${Math.round(44 + Math.sin(rt / 40) * 1.5)}°C`;
+        if (fAirRef.current) fAirRef.current.textContent = `Air ${Math.round(31 + Math.sin(rt / 55))}°C · wind ${Math.round(9 + Math.sin(rt / 17) * 3)} km/h`;
+
+        if (c1.current) {
+          const list = order.map((c, p) => ({
+            g: p ? ((lead.lap * f1.TL + lead.s) - (c.lap * f1.TL + c.s)) / 28 * 3.9 : 0,
+            col: c.tm[1],
+            code: c.tm[2],
+          }));
+          drawGapBars(c1.current, list);
+        }
+        if (c2.current) {
+          drawLapBars(c2.current, f1.ST.laps, b.t);
+        }
+        if (c3.current) {
+          drawFlightBars(c3.current, f1.ST.stops.map(d => ({ dur: d, late: d >= 3 })));
+        }
+        if (c4.current) {
+          drawTyreBars(c4.current, f1.cars);
+        }
+      } else if (mode === 'airport') {
         const air = getActiveAirportSceneState<AirportSceneState>();
         const simT = air?.simT ?? 0;
         const flights = air?.flights ?? [];
@@ -106,35 +190,35 @@ export default function DashboardCards() {
           drawLines(c5.current, [{ d: acc, c: cssv('--ok'), fill: true }]);
         }
         if (c4.current) {
-          const gates = [{ u: 0.85 }, { u: 0.92 }, { u: 0.74 }, { u: 0.88 }, { u: 0.68 }, { u: 0.94 }];
+          const gates = [
+            { u: 0.88 }, { u: 0.72 }, { u: 0.94 }, { u: 0.65 },
+            { u: 0.82 }, { u: 0.91 }, { u: 0.76 }, { u: 0.85 }
+          ];
           drawWhBars(c4.current, gates);
         }
       } else {
-        // LOGISTICS MODE
-        const st = getActiveSceneState();
-        if (st) {
-          M.pD = st.M.pD; M.pL = st.M.pL;
-          M.dD = st.M.dD; M.dL = st.M.dL;
-          M.fl = st.M.fl; M.rt = st.M.rt; M.re = st.M.re;
-          M.win = st.M.win; M.kwh = st.M.kwh; M.peak = st.M.peak;
-        }
+        // Logistics Mode
+        const state = getActiveSceneState();
+        const simT = (state?.simT as number) ?? 0;
+        const chargers = (state?.chargers as { busy: boolean }[]) ?? [];
+        const WH = (state?.WH as { u: number }[]) ?? [];
+        const drones = (state?.drones as { state: string }[]) ?? [];
+        const pvN = (state?.pvN as number) ?? 0;
 
-        const simT = getActiveSceneState()?.simT ?? 0;
-        const pvN = getActiveSceneState()?.pvN ?? 0;
-        const chargers = (getActiveSceneState()?.chargers ?? []) as Array<{ busy: boolean }>;
-        const getWH = () => (getActiveSceneState()?.WH ?? []) as Array<{ u: number }>;
+        const solarNow = () =>
+          pvN * 21 * Math.max(0.3, 0.88 + 0.07 * Math.sin(simT / 11) + 0.04 * Math.sin(simT / 3.7 + 1) - 0.38 * Math.pow(Math.max(0, Math.sin(simT / 7.3)), 8)) * 0.95;
+        const demandNow = () =>
+          1450 + chargers.filter(c => c.busy).length * 22 + 90 * Math.sin(simT / 6);
 
-        const kw = pvN * 21 * Math.max(0.3, 0.88 + 0.07 * Math.sin(simT / 11) + 0.04 * Math.sin(simT / 3.7 + 1) - 0.38 * Math.pow(Math.max(0, Math.sin(simT / 7.3)), 8)) * 0.95;
-        const dem = 1450 + chargers.filter(c => c.busy).length * 22 + 90 * Math.sin(Date.now() / 6000);
+        const kw = solarNow(), dem = demandNow();
+        M.kwh += kw / 60000;
+        M.peak = Math.max(M.peak, kw);
 
-        M.kwh += kw / 60000; M.peak = Math.max(M.peak, kw);
-        if (st) { st.M.kwh = M.kwh; st.M.peak = M.peak; }
-
-        const dd = M.pD - lastPD, dl2 = M.pL - lastPL;
+        const dd = M.pD - lastPD, dl = M.pL - lastPL;
         lastPD = M.pD; lastPL = M.pL;
-        M.pr.push((dd - dl2) * 60); M.pl.push(dl2 * 60);
+        M.pr.push((dd - dl) * 60); M.pl.push(dl * 60);
         M.sol.push(kw); M.dem.push(dem);
-        const acc = M.win.reduce((s, v) => s + v, 0) / M.win.length * 100;
+        const acc = (M.win.reduce((s, v) => s + v, 0) / M.win.length) * 100;
         M.acc.push(acc);
         [M.pr, M.pl, M.sol, M.dem, M.acc].forEach(a => { while (a.length > 30) a.shift(); });
         while (M.pr.length < 30) {
@@ -143,21 +227,23 @@ export default function DashboardCards() {
           M.acc.unshift(M.acc[0] ?? 0);
         }
 
-        const avg = M.fl.reduce((s, f) => s + f.dur, 0) / M.fl.length;
-        const util = getWH().reduce((s, w) => s + w.u, 0) / (getWH().length || 1) * 100;
-        const airborne = getActiveSceneState()?.drones.filter((d: { state: string }) => d.state === 'fly').length ?? 0;
+        const avg = M.fl.reduce((s, f) => s + f.dur, 0) / (M.fl.length || 1);
+        const util = (WH.reduce((s, w) => s + w.u, 0) / (WH.length || 1)) * 100;
 
         if (pdRef.current) pdRef.current.textContent = nf(M.pD);
         if (potRef.current) potRef.current.textContent = ((1 - M.pL / M.pD) * 100).toFixed(1) + '% on time';
         if (plRef.current) plRef.current.textContent = nf(M.pL) + ' delayed';
+
         if (ddRef.current) ddRef.current.textContent = nf(M.dD);
         if (dotRef.current) dotRef.current.textContent = ((1 - M.dL / M.dD) * 100).toFixed(1) + '% on time';
         if (dlRef.current) dlRef.current.textContent = nf(M.dL) + ' delayed';
-        if (dtRef.current) dtRef.current.textContent = airborne + ' of 18 airborne · avg ' + avg.toFixed(0) + ' s';
+        if (dtRef.current) dtRef.current.textContent = drones.filter(d => d.state === 'fly').length + ' of ' + drones.length + ' airborne · avg ' + avg.toFixed(0) + ' s';
+
         if (skRef.current) skRef.current.textContent = nf(kw) + ' kW';
         if (sdRef.current) sdRef.current.textContent = M.kwh.toFixed(1) + ' MWh today';
         if (sp2Ref.current) sp2Ref.current.textContent = 'Peak ' + nf(M.peak) + ' kW';
         if (sxRef.current) sxRef.current.textContent = (kw >= dem ? 'Exporting ' : 'Importing ') + nf(Math.abs(kw - dem)) + ' kW';
+
         if (waRef.current) waRef.current.textContent = acc.toFixed(1) + '%';
         if (wuRef.current) wuRef.current.textContent = Math.round(util) + '%';
         if (wsRef.current) wsRef.current.textContent = nf(M.rt - M.re) + ' of ' + nf(M.rt) + ' scans matched';
@@ -166,7 +252,7 @@ export default function DashboardCards() {
         if (c2.current) drawFlightBars(c2.current, M.fl);
         if (c3.current) drawLines(c3.current, [{ d: M.sol, c: cssv('--amber'), fill: true }, { d: M.dem, c: cssv('--blue'), dash: [6, 5] }], 0);
         if (c5.current) drawLines(c5.current, [{ d: M.acc, c: cssv('--ok'), fill: true }]);
-        if (c4.current) drawWhBars(c4.current, getWH());
+        if (c4.current) drawWhBars(c4.current, WH);
       }
     }
 
@@ -176,6 +262,78 @@ export default function DashboardCards() {
   }, []);
 
   const isAirport = currentMode === 'airport';
+  const isF1 = currentMode === 'f1';
+
+  if (isF1) {
+    return (
+      <div className="cards">
+        <article className="card">
+          <header>
+            <i className="dot" style={{ background: 'var(--teal)' }} />
+            Race progress
+          </header>
+          <div className="big" ref={fLapRef}>
+            Lap 1 / 10
+          </div>
+          <div className="sub">
+            <span ref={fPctRef}>0% complete</span>
+            <span className="ok" ref={fFlagRef}>
+              Green flag
+            </span>
+          </div>
+          <canvas ref={c1} role="img" aria-label="Gap to the leader by position" />
+          <footer>Gap to leader in seconds, by position</footer>
+        </article>
+
+        <article className="card">
+          <header>
+            <i className="dot" style={{ background: 'var(--blue)' }} />
+            Fastest lap
+          </header>
+          <div className="big" ref={fBestRef}>
+            —
+          </div>
+          <div className="sub">
+            <span ref={fBdrvRef}>No timed laps yet</span>
+            <span ref={fBlapRef} />
+          </div>
+          <canvas ref={c2} role="img" aria-label="Recent lap times" />
+          <footer>Recent racing laps · green = fastest</footer>
+        </article>
+
+        <article className="card">
+          <header>
+            <i className="dot" style={{ background: 'var(--amber)' }} />
+            Pit stops
+          </header>
+          <div className="big" ref={fPitsRef}>
+            0
+          </div>
+          <div className="sub">
+            <span ref={fPavgRef}>avg —</span>
+            <span className="ok" ref={fPbestRef} />
+          </div>
+          <canvas ref={c3} role="img" aria-label="Recent pit stop times" />
+          <footer>Recent stop times · amber = 3.0 s or slower</footer>
+        </article>
+
+        <article className="card">
+          <header>
+            <i className="dot" style={{ background: 'var(--ok)' }} />
+            Track conditions
+          </header>
+          <div className="big" ref={fTrkRef}>
+            44°C
+          </div>
+          <div className="sub">
+            <span ref={fAirRef}>Air 31°C</span>
+          </div>
+          <canvas ref={c4} role="img" aria-label="Tyre compounds in use" />
+          <footer>Tyre compounds currently in use</footer>
+        </article>
+      </div>
+    );
+  }
 
   return (
     <div className="cards">
